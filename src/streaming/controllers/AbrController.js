@@ -219,7 +219,7 @@ function AbrController() {
      * @returns {BitrateInfo | null}
      */
     function getTopBitrateInfoFor(type) {
-        if (type  && streamProcessorDict && streamProcessorDict[type]) {
+        if (type && streamProcessorDict && streamProcessorDict[type]) {
             const streamInfo = streamProcessorDict[type].getStreamInfo();
             if (streamInfo && streamInfo.id) {
                 const idx = getTopQualityIndexFor(type, streamInfo.id);
@@ -298,7 +298,7 @@ function AbrController() {
     }
 
     function checkPlaybackQuality(type) {
-        if (type  && streamProcessorDict && streamProcessorDict[type]) {
+        if (type && streamProcessorDict && streamProcessorDict[type]) {
             const streamInfo = streamProcessorDict[type].getStreamInfo();
             const streamId = streamInfo ? streamInfo.id : null;
             const oldQuality = getQualityFor(type);
@@ -329,7 +329,7 @@ function AbrController() {
                     newQuality = topQualityIdx;
                 }
 
-                switchHistoryDict[type].push({oldValue: oldQuality, newValue: newQuality});
+                switchHistoryDict[type].push({ oldValue: oldQuality, newValue: newQuality });
 
                 if (newQuality > SwitchRequest.NO_CHANGE && newQuality != oldQuality) {
                     if (abandonmentStateDict[type].state === MetricsConstants.ALLOW_LOAD || newQuality > oldQuality) {
@@ -356,15 +356,18 @@ function AbrController() {
     }
 
     function changeQuality(type, oldQuality, newQuality, topQualityIdx, reason) {
-        if (type  && streamProcessorDict[type]) {
+        if (type && streamProcessorDict[type]) {
             const streamInfo = streamProcessorDict[type].getStreamInfo();
             const id = streamInfo ? streamInfo.id : null;
             if (settings.get().debug.logLevel === Debug.LOG_LEVEL_DEBUG) {
                 const bufferLevel = dashMetrics.getCurrentBufferLevel(type);
                 logger.info('[' + type + '] switch from ' + oldQuality + ' to ' + newQuality + '/' + topQualityIdx + ' (buffer: ' + bufferLevel + ') ' + (reason ? JSON.stringify(reason) : '.'));
             }
+
             setQualityFor(type, id, newQuality);
-            eventBus.trigger(Events.QUALITY_CHANGE_REQUESTED, {mediaType: type, streamInfo: streamInfo, oldQuality: oldQuality, newQuality: newQuality, reason: reason});
+            eventBus.trigger(Events.QUALITY_CHANGE_REQUESTED, { mediaType: type, streamInfo: streamInfo, oldQuality: oldQuality, newQuality: newQuality, reason: reason });
+            logger.info(`changeQuality: quality change request triggered, ${JSON.stringify({ mediaType: type, newQuality, oldQuality, reason })}`);
+
             const bitrate = throughputHistory.getAverageThroughput(type);
             if (!isNaN(bitrate)) {
                 domStorage.setSavedBitrateSettings(type, bitrate);
@@ -539,12 +542,12 @@ function AbrController() {
 
         const minIdx = getMinAllowedIndexFor(type);
         if (minIdx !== undefined) {
-            newIdx = Math.max (idx , minIdx);
+            newIdx = Math.max(idx, minIdx);
         }
 
         const maxIdx = getMaxAllowedIndexFor(type);
         if (maxIdx !== undefined) {
-            newIdx = Math.min (newIdx , maxIdx);
+            newIdx = Math.min(newIdx, maxIdx);
         }
 
         return newIdx;
@@ -555,7 +558,7 @@ function AbrController() {
         if (isNaN(maxRepresentationRatio) || maxRepresentationRatio >= 1 || maxRepresentationRatio < 0) {
             return idx;
         }
-        return Math.min(idx , Math.round(maxIdx * maxRepresentationRatio) );
+        return Math.min(idx, Math.round(maxIdx * maxRepresentationRatio));
     }
 
     function setWindowResizeEventCalled(value) {
@@ -618,18 +621,18 @@ function AbrController() {
 
             if (switchRequest.quality > SwitchRequest.NO_CHANGE) {
                 const fragmentModel = streamProcessor.getFragmentModel();
-                const request = fragmentModel.getRequests({state: FragmentModel.FRAGMENT_MODEL_LOADING, index: e.request.index})[0];
+                const request = fragmentModel.getRequests({ state: FragmentModel.FRAGMENT_MODEL_LOADING, index: e.request.index })[0];
                 if (request) {
                     //TODO Check if we should abort or if better to finish download. check bytesLoaded/Total
                     fragmentModel.abortRequests();
                     setAbandonmentStateFor(type, MetricsConstants.ABANDON_LOAD);
                     switchHistoryDict[type].reset();
-                    switchHistoryDict[type].push({oldValue: getQualityFor(type), newValue: switchRequest.quality, confidence: 1, reason: switchRequest.reason});
+                    switchHistoryDict[type].push({ oldValue: getQualityFor(type), newValue: switchRequest.quality, confidence: 1, reason: switchRequest.reason });
                     setPlaybackQuality(type, streamController.getActiveStreamInfo(), switchRequest.quality, switchRequest.reason);
 
                     clearTimeout(abandonmentTimeout);
                     abandonmentTimeout = setTimeout(
-                        () => {setAbandonmentStateFor(type, MetricsConstants.ALLOW_LOAD); abandonmentTimeout = null;},
+                        () => { setAbandonmentStateFor(type, MetricsConstants.ALLOW_LOAD); abandonmentTimeout = null; },
                         settings.get().streaming.abandonLoadTimeout
                     );
                 }
