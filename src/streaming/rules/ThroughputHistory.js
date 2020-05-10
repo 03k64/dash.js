@@ -30,14 +30,16 @@
  */
 
 import Constants from '../constants/Constants';
+import Debug from '../../core/Debug';
 import FactoryMaker from '../../core/FactoryMaker';
 
 // throughput generally stored in kbit/s
 // latency generally stored in ms
 
 function ThroughputHistory(config) {
-
     config = config || {};
+    const context = this.context;
+
     // sliding window constants
     const MAX_MEASUREMENTS_TO_KEEP = 20;
     const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE = 3;
@@ -54,16 +56,20 @@ function ThroughputHistory(config) {
 
     const settings = config.settings;
 
-    let throughputDict,
+    let instance,
+        logger,
+        throughputDict,
         latencyDict,
         ewmaThroughputDict,
         ewmaLatencyDict,
         ewmaHalfLife;
 
     function setup() {
+        logger = Debug(context).getInstance().getLogger(instance);
+
         ewmaHalfLife = {
             throughputHalfLife: { fast: EWMA_THROUGHPUT_FAST_HALF_LIFE_SECONDS, slow: EWMA_THROUGHPUT_SLOW_HALF_LIFE_SECONDS },
-            latencyHalfLife:    { fast: EWMA_LATENCY_FAST_HALF_LIFE_COUNT,      slow: EWMA_LATENCY_SLOW_HALF_LIFE_COUNT }
+            latencyHalfLife: { fast: EWMA_LATENCY_FAST_HALF_LIFE_COUNT, slow: EWMA_LATENCY_SLOW_HALF_LIFE_COUNT }
         };
 
         reset();
@@ -94,6 +100,7 @@ function ThroughputHistory(config) {
         }
 
         const throughput = Math.round((8 * downloadBytes) / throughputMeasureTime); // bits/ms = kbits/s
+        logger.info(`push: new throughput sample: ${throughput}kbit/s`);
 
         checkSettingsForMediaType(mediaType);
 
@@ -225,8 +232,8 @@ function ThroughputHistory(config) {
     function checkSettingsForMediaType(mediaType) {
         throughputDict[mediaType] = throughputDict[mediaType] || [];
         latencyDict[mediaType] = latencyDict[mediaType] || [];
-        ewmaThroughputDict[mediaType] = ewmaThroughputDict[mediaType] || {fastEstimate: 0, slowEstimate: 0, totalWeight: 0};
-        ewmaLatencyDict[mediaType] = ewmaLatencyDict[mediaType] || {fastEstimate: 0, slowEstimate: 0, totalWeight: 0};
+        ewmaThroughputDict[mediaType] = ewmaThroughputDict[mediaType] || { fastEstimate: 0, slowEstimate: 0, totalWeight: 0 };
+        ewmaLatencyDict[mediaType] = ewmaLatencyDict[mediaType] || { fastEstimate: 0, slowEstimate: 0, totalWeight: 0 };
     }
 
     function clearSettingsForMediaType(mediaType) {
@@ -244,7 +251,7 @@ function ThroughputHistory(config) {
         ewmaLatencyDict = {};
     }
 
-    const instance = {
+    instance = {
         push: push,
         getAverageThroughput: getAverageThroughput,
         getSafeAverageThroughput: getSafeAverageThroughput,
