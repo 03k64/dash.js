@@ -34,6 +34,7 @@ import AbandonRequestsRule from './AbandonRequestsRule';
 import DroppedFramesRule from './DroppedFramesRule';
 import SwitchHistoryRule from './SwitchHistoryRule';
 import BolaRule from './BolaRule';
+import Debug from '../../../phd/metrics-api';
 import FactoryMaker from '../../../core/FactoryMaker';
 import SwitchRequest from '../SwitchRequest';
 
@@ -50,10 +51,13 @@ function ABRRulesCollection(config) {
     const settings = config.settings;
 
     let instance,
+        logger,
         qualitySwitchRules,
         abandonFragmentRules;
 
     function initialize() {
+        logger = Debug(context).getInstance().getLogger(instance);
+
         qualitySwitchRules = [];
         abandonFragmentRules = [];
 
@@ -153,6 +157,8 @@ function ABRRulesCollection(config) {
 
     function getMaxQuality(rulesContext) {
         const switchRequestArray = qualitySwitchRules.map(rule => rule.getMaxIndex(rulesContext));
+        logger.info(`getMaxQuality: switch request array generated ${JSON.stringify(switchRequestArray)}`);
+
         const activeRules = getActiveRules(switchRequestArray);
         const maxQuality = getMinSwitchRequest(activeRules);
 
