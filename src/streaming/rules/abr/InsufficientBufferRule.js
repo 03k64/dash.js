@@ -71,7 +71,7 @@ function InsufficientBufferRule(config) {
      * If the bufferLevel is low, then InsufficientBufferRule avoids rebuffering risk.
      * If the bufferLevel is high, then InsufficientBufferRule give a high MaxIndex allowing other rules to take over.
      */
-    function getMaxIndex (rulesContext) {
+    function getMaxIndex(rulesContext) {
         const switchRequest = SwitchRequest(context).create();
 
         if (!rulesContext || !rulesContext.hasOwnProperty('getMediaType')) {
@@ -139,6 +139,7 @@ function InsufficientBufferRule(config) {
 
     instance = {
         getMaxIndex: getMaxIndex,
+        name: 'insufficientBuffer',
         reset: reset
     };
 

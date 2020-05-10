@@ -40,14 +40,15 @@ function DroppedFramesRule() {
                     }
                 }
             }
-            return SwitchRequest(context).create(maxIndex, {droppedFrames: droppedFrames});
+            return SwitchRequest(context).create(maxIndex, { droppedFrames: droppedFrames });
         }
 
         return switchRequest;
     }
 
     instance = {
-        getMaxIndex: getMaxIndex
+        getMaxIndex: getMaxIndex,
+        name: 'droppedFrames'
     };
 
     setup();

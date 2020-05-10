@@ -43,9 +43,9 @@ import Debug from '../../../core/Debug';
 // BOLA_STATE_STARTUP       : Set placeholder buffer such that we download fragments at most recently measured throughput.
 // BOLA_STATE_STEADY        : Buffer primed, we switch to steady operation.
 // TODO: add BOLA_STATE_SEEK and tune BOLA behavior on seeking
-const BOLA_STATE_ONE_BITRATE    = 0;
-const BOLA_STATE_STARTUP        = 1;
-const BOLA_STATE_STEADY         = 2;
+const BOLA_STATE_ONE_BITRATE = 0;
+const BOLA_STATE_STARTUP = 1;
+const BOLA_STATE_STEADY = 2;
 
 const MINIMUM_BUFFER_S = 10; // BOLA should never add artificial delays if buffer is less than MINIMUM_BUFFER_S.
 const MINIMUM_BUFFER_PER_BITRATE_LEVEL_S = 2;
@@ -105,7 +105,7 @@ function BolaRule(config) {
         const Vp = MINIMUM_BUFFER_S / gp;
         // note that expressions for gp and Vp assume utilities[0] === 1, which is true because of normalization
 
-        return {gp: gp, Vp: Vp};
+        return { gp: gp, Vp: Vp };
     }
 
     function getInitialBolaState(rulesContext) {
@@ -530,6 +530,7 @@ function BolaRule(config) {
 
     instance = {
         getMaxIndex: getMaxIndex,
+        name: 'bola',
         reset: reset
     };
 

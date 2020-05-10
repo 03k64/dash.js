@@ -37,7 +37,7 @@ function SwitchHistoryRule() {
 
                 if (drops + noDrops >= SAMPLE_SIZE && (drops / noDrops > MAX_SWITCH)) {
                     switchRequest.quality = (i > 0 && switchRequests[i].drops > 0) ? i - 1 : i;
-                    switchRequest.reason = {index: switchRequest.quality, drops: drops, noDrops: noDrops, dropSize: dropSize};
+                    switchRequest.reason = { index: switchRequest.quality, drops: drops, noDrops: noDrops, dropSize: dropSize };
                     logger.debug('Switch history rule index: ' + switchRequest.quality + ' samples: ' + (drops + noDrops) + ' drops: ' + drops);
                     break;
                 }
@@ -48,7 +48,8 @@ function SwitchHistoryRule() {
     }
 
     instance = {
-        getMaxIndex: getMaxIndex
+        getMaxIndex: getMaxIndex,
+        name: 'switchHistory'
     };
 
     setup();
