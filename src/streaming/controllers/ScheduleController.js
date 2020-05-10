@@ -30,7 +30,7 @@
  */
 import Constants from '../constants/Constants';
 import MetricsConstants from '../constants/MetricsConstants';
-import {PlayListTrace} from '../vo/metrics/PlayList';
+import { PlayListTrace } from '../vo/metrics/PlayList';
 import BufferLevelRule from '../rules/scheduling/BufferLevelRule';
 import NextFragmentRequestRule from '../rules/scheduling/NextFragmentRequestRule';
 import FragmentModel from '../models/FragmentModel';
@@ -236,10 +236,24 @@ function ScheduleController(config) {
 
                         if (request) {
                             logger.debug('Next fragment request url is ' + request.url);
+                            logger.info(
+                                'schedule.getNextFragment: request for next fragment triggered',
+                                JSON.stringify({
+                                    mediaType: request.mediaType,
+                                    quality: request.quality,
+                                    startTime: request.startTime,
+                                    url: request.url
+                                })
+                            );
+
                             fragmentModel.executeRequest(request);
                         } else { // Use case - Playing at the bleeding live edge and frag is not available yet. Cycle back around.
                             setFragmentProcessState(false);
-                            startScheduleTimer(settings.get().streaming.lowLatencyEnabled ? 100 : 500);
+
+                            const delay = settings.get().streaming.lowLatencyEnabled ? 100 : 500;
+                            logger.info(`schedule.getNextFragment: schedule triggered with ${delay}ms delay`);
+
+                            startScheduleTimer(delay);
                         }
                         checkPlaybackQuality = true;
                     }
@@ -248,12 +262,14 @@ function ScheduleController(config) {
 
             setFragmentProcessState(true);
             if (!isReplacement && checkPlaybackQuality) {
+                logger.info(`schedule: abrController.checkPlaybackQuality triggered for ${type}`);
                 abrController.checkPlaybackQuality(type);
             }
 
             getNextFragment();
 
         } else {
+            logger.info('schedule: schedule triggered with 500ms delay');
             startScheduleTimer(500);
         }
     }
@@ -410,6 +426,9 @@ function ScheduleController(config) {
 
         if (isStopped) {
             start();
+            logger.info('onStreamInitialized: schedule triggered with no delay');
+        } else {
+            logger.info('onStreamInitialized: schedule not triggered');
         }
     }
 
@@ -497,6 +516,7 @@ function ScheduleController(config) {
         if (e.error && e.request.serviceLocation && !isStopped) {
             replaceRequest(e.request);
             setFragmentProcessState(false);
+            logger.info('onFragmentLoadingCompleted: schedule triggered with no delay');
             startScheduleTimer(0);
         }
 
@@ -528,12 +548,16 @@ function ScheduleController(config) {
             const fragEndTime = e.startTime + currentRepresentationInfo.fragmentDuration;
             const safeBufferLevel = currentRepresentationInfo.fragmentDuration * 1.5;
             if ((currentTime + safeBufferLevel) >= fragEndTime) {
+                logger.info('onBytesAppended: schedule triggered with no delay');
                 startScheduleTimer(0);
             } else {
-                startScheduleTimer((fragEndTime - (currentTime + safeBufferLevel)) * 1000);
+                const delay = (fragEndTime - (currentTime + safeBufferLevel)) * 1000;
+                logger.info(`onBytesAppended: schedule triggered with ${delay}ms delay`);
+                startScheduleTimer(delay);
             }
             isReplacementRequest = false;
         } else {
+            logger.info('onBytesAppended: schedule triggered with no delay');
             startScheduleTimer(0);
         }
     }
@@ -548,6 +572,7 @@ function ScheduleController(config) {
             replaceRequest(e.request);
         }
         setFragmentProcessState(false);
+        logger.info('onFragmentLoadingAbandoned: schedule triggered with no delay');
         startScheduleTimer(0);
     }
 
@@ -579,7 +604,10 @@ function ScheduleController(config) {
         }
 
         if (e.hasEnoughSpaceToAppend && e.quotaExceeded && isStopped) {
+            logger.info('onBufferCleared: schedule triggered with no delay');
             start();
+        } else {
+            logger.info('onBufferCleared: schedule not triggered');
         }
     }
 
@@ -619,7 +647,10 @@ function ScheduleController(config) {
 
     function onPlaybackStarted() {
         if (isStopped || !settings.get().streaming.scheduleWhilePaused) {
+            logger.info('onPlaybackStarted: schedule triggered with no delay');
             start();
+        } else {
+            logger.info('onPlaybackStarted: schedule not triggered');
         }
     }
 
@@ -628,7 +659,10 @@ function ScheduleController(config) {
         setTimeToLoadDelay(0);
 
         if (isStopped) {
+            logger.info('onPlaybackSeeking: schedule triggered with no delay');
             start();
+        } else {
+            logger.info('onPlaybackSeeking: schedule not triggered');
         }
 
         const latency = currentRepresentationInfo.DVRWindow && playbackController ? currentRepresentationInfo.DVRWindow.end - playbackController.getTime() : NaN;
@@ -638,15 +672,17 @@ function ScheduleController(config) {
 
         //if, during the seek command, the scheduleController is waiting : stop waiting, request chunk as soon as possible
         if (!isFragmentProcessingInProgress) {
+            logger.info('onPlaybackSeeking: schedule triggered with no delay');
             startScheduleTimer(0);
         } else {
+            logger.info('onPlaybackSeeking: schedule not triggered');
             logger.debug('onPlaybackSeeking, call fragmentModel.abortRequests in order to seek quicker');
             fragmentModel.abortRequests();
         }
     }
 
     function onPlaybackRateChanged(e) {
-        dashMetrics.updatePlayListTraceMetrics({playbackspeed: e.playbackRate.toString()});
+        dashMetrics.updatePlayListTraceMetrics({ playbackspeed: e.playbackRate.toString() });
     }
 
     function setSeekTarget(value) {
