@@ -30,6 +30,7 @@
  */
 
 import FactoryMaker from '../../core/FactoryMaker';
+import { logRequest } from '../../phd/metrics-api';
 
 /**
  * @module FetchLoader
@@ -85,7 +86,11 @@ function FetchLoader(cfg) {
             signal: abortController ? abortController.signal : undefined
         };
 
-        fetch(httpRequest.url, reqOptions).then(function (response) {
+        const startTime = Date.now();
+        const executedRequest = fetch(httpRequest.url, reqOptions);
+        logRequest(httpRequest, startTime);
+
+        executedRequest.then(function (response) {
             if (!httpRequest.response) {
                 httpRequest.response = {};
             }
@@ -130,7 +135,7 @@ function FetchLoader(cfg) {
             httpRequest.reader = response.body.getReader();
             let downLoadedData = [];
 
-            const processResult = function ({value, done}) {
+            const processResult = function ({ value, done }) {
                 if (done) {
                     if (remaining) {
                         // If there is pending data, call progress so network metrics

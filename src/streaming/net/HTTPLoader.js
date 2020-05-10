@@ -30,11 +30,13 @@
  */
 import XHRLoader from './XHRLoader';
 import FetchLoader from './FetchLoader';
-import {HTTPRequest} from '../vo/metrics/HTTPRequest';
+import { HTTPRequest } from '../vo/metrics/HTTPRequest';
 import FactoryMaker from '../../core/FactoryMaker';
 import DashJSError from '../vo/DashJSError';
 import CmcdModel from '../models/CmcdModel';
 import Utils from '../../core/Utils';
+import { logResponse } from '../../phd/metrics-api';
+import uuid from 'uuid/v4';
 
 /**
  * @module HTTPLoader
@@ -125,7 +127,7 @@ function HTTPLoader(cfg) {
 
                 if (remainingAttempts > 0) {
                     remainingAttempts--;
-                    let retryRequest = {config: config};
+                    let retryRequest = { config: config };
                     retryRequests.push(retryRequest);
                     retryRequest.timeout = setTimeout(function () {
                         if (retryRequests.indexOf(retryRequest) === -1) {
@@ -185,6 +187,9 @@ function HTTPLoader(cfg) {
         };
 
         const onload = function () {
+            const endTime = Date.now();
+            logResponse(httpRequest, endTime);
+
             if (httpRequest.response.status >= 200 && httpRequest.response.status <= 299) {
                 handleLoaded(true);
 
@@ -224,6 +229,7 @@ function HTTPLoader(cfg) {
 
 
         httpRequest = {
+            id: uuid(),
             url: modifiedUrl,
             method: verb,
             withCredentials: withCredentials,
@@ -244,7 +250,7 @@ function HTTPLoader(cfg) {
             loader.load(httpRequest);
         } else {
             // delay
-            let delayedRequest = {httpRequest: httpRequest};
+            let delayedRequest = { httpRequest: httpRequest };
             delayedRequests.push(delayedRequest);
             delayedRequest.delayTimeout = setTimeout(function () {
                 if (delayedRequests.indexOf(delayedRequest) === -1) {

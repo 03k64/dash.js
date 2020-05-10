@@ -29,6 +29,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 import FactoryMaker from '../../core/FactoryMaker';
+import { logRequest } from '../../phd/metrics-api';
 
 /**
  * @module XHRLoader
@@ -76,7 +77,9 @@ function XHRLoader(cfg) {
         xhr.onprogress = httpRequest.progress;
         xhr.onabort = httpRequest.onabort;
 
+        const startTime = Date.now();
         xhr.send();
+        logRequest(httpRequest, startTime);
 
         httpRequest.response = xhr;
     }
