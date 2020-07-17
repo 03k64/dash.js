@@ -171,8 +171,10 @@ function FetchLoader(cfg) {
 
                     window.processResultHistory.push({
                         date: new Date(),
+                        mediaType: httpRequest.request.mediaType,
                         processResultTime: processResultEnd - processResultStart,
-                        url: httpRequest.url,
+                        quality: httpRequest.request.quality,
+                        segmentStartTime: httpRequest.request.startTime,
                         arrayOpsTime,
                         calculateDownloadedTimeTime,
                         concatTypedArrayTime,
@@ -259,9 +261,12 @@ function FetchLoader(cfg) {
 
                 window.processResultHistory.push({
                     date: new Date(),
+                    mediaType: httpRequest.request.mediaType,
                     processResultTime: processResultEnd - processResultStart,
-                    url: httpRequest.url,
+                    quality: httpRequest.request.quality,
+                    segmentStartTime: httpRequest.request.startTime,
                     arrayOpsTime,
+                    calculateDownloadedTimeTime,
                     concatTypedArrayTime,
                     done,
                     findLastTopIsoBoxCompletedTime,
