@@ -87,6 +87,9 @@ function FetchLoader(cfg) {
         };
 
         fetch(httpRequest.url, reqOptions).then(function (response) {
+            const firstByte = new Date();
+            window.fetchFirstByteHistory.push({ date: firstByte, url: httpRequest.url, value: firstByte });
+
             if (!httpRequest.response) {
                 httpRequest.response = {};
             }
@@ -98,11 +101,14 @@ function FetchLoader(cfg) {
                 httpRequest.onerror();
             }
 
+            const headersStart = window.performance.now();
             let responseHeaders = '';
             for (const key of response.headers.keys()) {
                 responseHeaders += key + ': ' + response.headers.get(key) + '\r\n';
             }
             httpRequest.response.responseHeaders = responseHeaders;
+            const headersEnd = window.performance.now();
+            let headersTime = headersEnd - headersStart;
 
             if (!response.body) {
                 // Fetch returning a ReadableStream response body is not currently supported by all browsers.
@@ -132,11 +138,20 @@ function FetchLoader(cfg) {
             let downLoadedData = [];
 
             const processResult = function ({value, done}) {
+                const processResultStart = window.performance.now();
+
+                let arrayOpsTime = 0;
+                let calculateDownloadedTimeTime = 0;
+                let concatTypedArrayTime = 0;
+                let findLastTopIsoBoxCompletedTime = 0;
+                let httpRequestProgressTime = 0;
+
                 if (done) {
                     if (remaining) {
                         // If there is pending data, call progress so network metrics
                         // are correctly generated
                         // Same structure as https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequestEventTarget/onprogress
+                        const httpRequestProgressStart = window.performance.now();
                         httpRequest.progress({
                             loaded: bytesReceived,
                             total: isNaN(totalBytes) ? bytesReceived : totalBytes,
@@ -144,23 +159,51 @@ function FetchLoader(cfg) {
                             time: calculateDownloadedTime(downLoadedData, bytesReceived),
                             stream: true
                         });
+                        const httpRequestProgressEnd = window.performance.now();
+                        httpRequestProgressTime = httpRequestProgressEnd - httpRequestProgressStart;
 
                         httpRequest.response.response = remaining.buffer;
                     }
                     httpRequest.onload();
                     httpRequest.onend();
+
+                    const processResultEnd = window.performance.now();
+
+                    window.processResultHistory.push({
+                        date: new Date(),
+                        processResultTime: processResultEnd - processResultStart,
+                        url: httpRequest.url,
+                        arrayOpsTime,
+                        calculateDownloadedTimeTime,
+                        concatTypedArrayTime,
+                        done,
+                        findLastTopIsoBoxCompletedTime,
+                        headersTime,
+                        httpRequestProgressTime
+                    });
+
+                    headersTime = 0;
+
                     return;
                 }
 
                 if (value && value.length > 0) {
+                    const concatTypedArrayStart = window.performance.now();
                     remaining = concatTypedArray(remaining, value);
+                    const concatTypedArrayEnd = window.performance.now();
+                    concatTypedArrayTime = concatTypedArrayEnd - concatTypedArrayStart;
+
                     bytesReceived += value.length;
                     downLoadedData.push({
                         ts: Date.now(),
                         bytes: value.length
                     });
 
+                    const findLastTopIsoBoxCompletedStart = window.performance.now();
                     const boxesInfo = boxParser.findLastTopIsoBoxCompleted(['moov', 'mdat'], remaining, offset);
+                    const findLastTopIsoBoxCompletedEnd = window.performance.now();
+                    findLastTopIsoBoxCompletedTime = findLastTopIsoBoxCompletedEnd - findLastTopIsoBoxCompletedStart;
+
                     if (boxesInfo.found) {
                         const end = boxesInfo.lastCompletedOffset + boxesInfo.size;
 
@@ -169,6 +212,8 @@ function FetchLoader(cfg) {
                         // and adjust remaining buffer. A clone is needed because ArrayBuffer of a typed-array
                         // keeps a reference to the original data
                         let data;
+
+                        const arrayOpsStart = window.performance.now();
                         if (end === remaining.length) {
                             data = remaining;
                             remaining = new Uint8Array();
@@ -176,14 +221,19 @@ function FetchLoader(cfg) {
                             data = new Uint8Array(remaining.subarray(0, end));
                             remaining = remaining.subarray(end);
                         }
+                        const arrayOpsEnd = window.performance.now();
+                        arrayOpsTime = arrayOpsEnd - arrayOpsStart;
 
                         // Announce progress but don't track traces. Throughput measures are quite unstable
                         // when they are based in small amount of data
+                        const httpRequestProgressStart = window.performance.now();
                         httpRequest.progress({
                             data: data.buffer,
                             lengthComputable: false,
                             noTrace: true
                         });
+                        const httpRequestProgressEnd = window.performance.now();
+                        httpRequestProgressTime = httpRequestProgressEnd - httpRequestProgressStart;
 
                         offset = 0;
                     } else {
@@ -192,14 +242,35 @@ function FetchLoader(cfg) {
                         // Call progress so it generates traces that will be later used to know when the first byte
                         // were received
                         if (!signaledFirstByte) {
+                            const httpRequestProgressStart = window.performance.now();
                             httpRequest.progress({
                                 lengthComputable: false,
                                 noTrace: true
                             });
+                            const httpRequestProgressEnd = window.performance.now();
+                            httpRequestProgressTime = httpRequestProgressEnd - httpRequestProgressStart;
+
                             signaledFirstByte = true;
                         }
                     }
                 }
+
+                const processResultEnd = window.performance.now();
+
+                window.processResultHistory.push({
+                    date: new Date(),
+                    processResultTime: processResultEnd - processResultStart,
+                    url: httpRequest.url,
+                    arrayOpsTime,
+                    concatTypedArrayTime,
+                    done,
+                    findLastTopIsoBoxCompletedTime,
+                    headersTime,
+                    httpRequestProgressTime
+                });
+
+                headersTime = 0;
+
                 read(httpRequest, processResult);
             };
 

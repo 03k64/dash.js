@@ -33,7 +33,13 @@ describe('HTTPLoader', function () {
     beforeEach(function () {
         if (typeof window === 'undefined') {
             global.window = {
-                fetch: function () { }
+                fetch: function () { },
+                fetchFirstByteHistory: [],
+                httpFirstByteHistory: [],
+                performance: {
+                    now: function () { }
+                },
+                processResultHistory: []
             };
         }
 
