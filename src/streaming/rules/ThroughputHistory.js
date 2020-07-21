@@ -94,6 +94,12 @@ function ThroughputHistory(config) {
         }
 
         const throughput = Math.round((8 * downloadBytes) / throughputMeasureTime); // bits/ms = kbits/s
+        window.throughputHistory.push({
+            date: new Date(),
+            quality: httpRequest._quality,
+            value: throughput / 1000,
+            mediaType
+        });
 
         checkSettingsForMediaType(mediaType);
 
