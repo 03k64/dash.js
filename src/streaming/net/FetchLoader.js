@@ -145,6 +145,7 @@ function FetchLoader(cfg) {
                 let concatTypedArrayTime = 0;
                 let findLastTopIsoBoxCompletedTime = 0;
                 let httpRequestProgressTime = 0;
+                let valueLength = 0;
 
                 if (done) {
                     if (remaining) {
@@ -156,7 +157,7 @@ function FetchLoader(cfg) {
                             loaded: bytesReceived,
                             total: isNaN(totalBytes) ? bytesReceived : totalBytes,
                             lengthComputable: true,
-                            time: calculateDownloadedTime(downLoadedData, bytesReceived),
+                            time: calculateDownloadedTime(downLoadedData, bytesReceived, httpRequest.request.startTime, httpRequest.request.mediaType),
                             stream: true
                         });
                         const httpRequestProgressEnd = window.performance.now();
@@ -181,7 +182,8 @@ function FetchLoader(cfg) {
                         done,
                         findLastTopIsoBoxCompletedTime,
                         headersTime,
-                        httpRequestProgressTime
+                        httpRequestProgressTime,
+                        valueLength
                     });
 
                     headersTime = 0;
@@ -265,6 +267,7 @@ function FetchLoader(cfg) {
                     processResultTime: processResultEnd - processResultStart,
                     quality: httpRequest.request.quality,
                     segmentStartTime: httpRequest.request.startTime,
+                    valueLength: value.length,
                     arrayOpsTime,
                     calculateDownloadedTimeTime,
                     concatTypedArrayTime,
@@ -325,8 +328,27 @@ function FetchLoader(cfg) {
         }
     }
 
-    function calculateDownloadedTime(datum, bytesReceived) {
-        datum = datum.filter(data => data.bytes > ((bytesReceived / 4) / datum.length));
+    // Calculate the download time for all chunks in segment
+    // Filter out those chunks with a size smaller than the mean of a quarter of total bytes received
+    //     (ie. where the chunk was small enough to have introduced measurement inaccuracy)
+    // Filter out those chunks which were received _more_ than the average amount of time apart
+    //     (ie. where gaps in transmission may have occurred)
+    function calculateDownloadedTime(datum, bytesReceived, segmentStartTime, mediaType) {
+        let totalChunks = datum.length;
+        let sizeFilterRemovedChunkIndices = [];
+        let timeFilterIgnoredChunkIndices = [];
+
+        const bytesThreshold = (bytesReceived / 4) / datum.length;
+
+        datum = datum.filter((data, ix) => {
+            if (data.bytes > bytesThreshold) {
+                return true;
+            } else {
+                sizeFilterRemovedChunkIndices.push(ix);
+                return false;
+            }
+        });
+
         if (datum.length > 1) {
             let time = 0;
             const avgTimeDistance = (datum[datum.length - 1].ts - datum[0].ts) / datum.length;
@@ -335,11 +357,37 @@ function FetchLoader(cfg) {
                 const next = datum[index + 1];
                 if (next) {
                     const distance = next.ts - data.ts;
-                    time += distance < avgTimeDistance ? distance : 0;
+                    if (distance < avgTimeDistance) {
+                        time += distance;
+                    } else {
+                        timeFilterIgnoredChunkIndices.push(index);
+                    }
                 }
             });
+
+            window.calculateDownloadedTimeHistory.push({
+                date: new Date(),
+                chunksUtilised: totalChunks - sizeFilterRemovedChunkIndices.length - timeFilterIgnoredChunkIndices.length,
+                mediaType,
+                segmentStartTime,
+                sizeFilterRemovedChunkIndices,
+                timeFilterIgnoredChunkIndices,
+                totalChunks
+            });
+
             return time;
         }
+
+        window.calculateDownloadedTimeHistory.push({
+            date: new Date(),
+            chunksUtilised: totalChunks - sizeFilterRemovedChunkIndices.length - timeFilterIgnoredChunkIndices.length,
+            mediaType,
+            segmentStartTime,
+            sizeFilterRemovedChunkIndices,
+            timeFilterIgnoredChunkIndices,
+            totalChunks
+        });
+
         return null;
     }
 
