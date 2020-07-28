@@ -335,6 +335,8 @@ function FetchLoader(cfg) {
     //     (ie. where gaps in transmission may have occurred)
     function calculateDownloadedTime(datum, bytesReceived, segmentStartTime, mediaType) {
         let totalChunks = datum.length;
+        let chunkSizes = datum.map(d => d.bytes);
+        let chunkDeltas = datum.map((d, i) => i === 0 ? 0 : d.ts - datum[i - 1].ts);
         let sizeFilterRemovedChunkIndices = [];
         let timeFilterIgnoredChunkIndices = [];
 
@@ -368,6 +370,8 @@ function FetchLoader(cfg) {
             window.calculateDownloadedTimeHistory.push({
                 date: new Date(),
                 chunksUtilised: totalChunks - sizeFilterRemovedChunkIndices.length - timeFilterIgnoredChunkIndices.length,
+                chunkDeltas,
+                chunkSizes,
                 mediaType,
                 segmentStartTime,
                 sizeFilterRemovedChunkIndices,
@@ -381,6 +385,8 @@ function FetchLoader(cfg) {
         window.calculateDownloadedTimeHistory.push({
             date: new Date(),
             chunksUtilised: totalChunks - sizeFilterRemovedChunkIndices.length - timeFilterIgnoredChunkIndices.length,
+            chunkDeltas,
+            chunkSizes,
             mediaType,
             segmentStartTime,
             sizeFilterRemovedChunkIndices,
