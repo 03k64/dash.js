@@ -35,6 +35,7 @@ function TransportInfoHistory(config) {
     config = config || {};
 
     const HEADER_KEYS = ['Transport-Info', 'transport-info'];
+    const HEADER_KEY_LC = 'transport-info: ';
     const FIELD_PARSERS = {
         cwnd: parseInt,
         dstport: parseInt,
@@ -70,6 +71,15 @@ function TransportInfoHistory(config) {
             return;
         }
 
+        if (typeof headers === 'string') {
+            const lcHeaders = headers.toLowerCase();
+            const startIx = lcHeaders.indexOf(HEADER_KEY_LC) + HEADER_KEY_LC.length;
+            const endIx = lcHeaders.indexOf('\r\n', startIx);
+
+            return headers.substring(startIx, endIx);
+        }
+
+        // 'headers' is an object, look for matching key
         const key = HEADER_KEYS.map(key => headers.hasOwnProperty(key));
         if (key === null || key === undefined) {
             return;
