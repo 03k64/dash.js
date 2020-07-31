@@ -52,6 +52,7 @@ import {HTTPRequest} from '../streaming/vo/metrics/HTTPRequest';
  *          logLevel: Debug.LOG_LEVEL_WARNING
  *      },
  *      streaming: {
+ *          maximumSegmentSize: 1460,
  *          metricsMaxListDepth: 1000,
  *          abandonLoadTimeout: 10000,
  *          liveDelayFragmentCount: NaN,
@@ -207,6 +208,7 @@ import {HTTPRequest} from '../streaming/vo/metrics/HTTPRequest';
 
 /**
  * @typedef {Object} StreamingSettings
+ * @property {number} [maximumSegmentSize=1460] MSS value used for the downstream connection (ie. from video server to client browser)
  * @property {number} [metricsMaxListDepth=1000] Maximum list depth of metrics.
  * @property {number} [abandonLoadTimeout=10000]
  * A timeout value in seconds, which during the ABRController will block switch-up events.
@@ -388,6 +390,7 @@ function Settings() {
             logLevel: Debug.LOG_LEVEL_WARNING
         },
         streaming: {
+            maximumSegmentSize: 1460,
             metricsMaxListDepth: 1000,
             abandonLoadTimeout: 10000,
             liveDelayFragmentCount: NaN,
