@@ -182,8 +182,6 @@ function TransportInfoHistory(config) {
     setup();
 
     return instance;
-
-    // rd-local; ts=2020-07-30T14:25:17.222Z; cwnd=10; rtt=23.864; rcv_space=14400; dstport=34294; rttvar=1100
 }
 
 TransportInfoHistory.__dashjs_factory_name = 'TransportInfoHistory';
