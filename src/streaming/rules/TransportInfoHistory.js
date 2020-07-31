@@ -47,14 +47,13 @@ function TransportInfoHistory(config) {
         ts: Date.parse
     };
     const MAX_MEASUREMENTS_TO_KEEP = 100;
+    const SLIDING_WINDOW_SAMPLE_SIZE = 4;
 
-    let cwndDict,
-        rttDict,
-        transportInfoDict;
+    const settings = config.settings;
+
+    let transportInfoDict;
 
     function reset() {
-        cwndDict = {};
-        rttDict = {};
         transportInfoDict = {};
     }
 
@@ -90,8 +89,10 @@ function TransportInfoHistory(config) {
 
     function consumeTransportInfoField(transportInfoEntry, transportInfoField) {
         // Split into key, value pair, handling case that value contains one or more '=' characters
-        const [key, ...values] = transportInfoField.split('=');
-        const value = values.join('=');
+        const [rawKey, ...rawValues] = transportInfoField.trim().split('=');
+
+        const key = rawKey.trim();
+        const value = rawValues.join('=').trim();
 
         const parse = FIELD_PARSERS[key] || parseUnmodified;
         transportInfoEntry[key] = parse(value);
@@ -141,34 +142,65 @@ function TransportInfoHistory(config) {
         // Ensure all dictionaries are initialised
         checkSettingsForMediaType(mediaType);
 
-        // Extract any new cwnd measurements from parsed transport-info
-        const newCwnd = transportInfo
-              .map(tiEntry => tiEntry.cwnd)
-              .filter(cwnd => cwnd !== null && cwnd !== undefined);
-
-        // Extract any new rtt measurements from parsed transport-info
-        const newRtt = transportInfo
-              .map(tiEntry => tiEntry.rtt)
-              .filter(rtt => rtt !== null && rtt !== undefined);
-
         // Append all new measurements to their respective dictionaries
-        cwndDict.push(...newCwnd);
-        rttDict.push(...newRtt);
-        transportInfoDict.push(...transportInfo);
+        transportInfoDict[mediaType].push(...transportInfo);
 
         // Ensure all new dictionaries are clamped to maximum size
-        cwndDict = cwndDict.slice(-MAX_MEASUREMENTS_TO_KEEP);
-        rttDict = rttDict.slice(-MAX_MEASUREMENTS_TO_KEEP);
-        transportInfoDict = transportInfoDict.slice(-MAX_MEASUREMENTS_TO_KEEP);
+        transportInfoDict[mediaType] = transportInfoDict[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
     }
 
-    function getAverageThroughput() {}
+    function estimateThroughputFromTransportInfo({ cwnd, rtt }) {
+        const mss = settings.get().streaming.maximumSegmentSize;
 
-    function getAverageLatency() {}
+        return cwnd * mss * 8 * (1000 / rtt);
+    }
+
+    function filterValidThroughputSample({ cwnd, rtt }) {
+        return cwnd !== null &&
+            cwnd !== undefined &&
+            !isNaN(cwnd) &&
+            rtt !== undefined &&
+            rtt !== null &&
+            !isNaN(rtt);
+    }
+
+    function getAverageThroughput(mediaType) {
+        const samples = transportInfoDict[mediaType];
+        if (samples === null || samples === undefined || samples.length === 0) {
+            return 0;
+        }
+
+        const validSamples = samples.filter(filterValidThroughputSample);
+        if (validSamples.length === 0) {
+            return 0;
+        }
+
+        const totalThroughputEstimate = validSamples
+            .slice(-SLIDING_WINDOW_SAMPLE_SIZE)
+            .map(estimateThroughputFromTransportInfo)
+            .reduce((sum, sample) => sum + sample);
+
+        return totalThroughputEstimate / SLIDING_WINDOW_SAMPLE_SIZE / 1000;
+    }
+
+    function getAverageLatency(mediaType) {
+        const samples = transportInfoDict[mediaType];
+        if (samples === null || samples === undefined || samples.length === 0) {
+            return 0;
+        }
+
+        const validSamples = samples
+              .filter(({ rtt }) => rtt !== null && rtt !== undefined && !isNaN(rtt))
+              .map(({ rtt }) => rtt);
+
+        if (validSamples.length === 0) {
+            return 0;
+        }
+
+        return validSamples.slice(-SLIDING_WINDOW_SAMPLE_SIZE).reduce((sum, sample) => sum + sample) / SLIDING_WINDOW_SAMPLE_SIZE;
+    }
 
     function checkSettingsForMediaType(mediaType) {
-        cwndDict[mediaType] = cwndDict[mediaType] || [];
-        rttDict[mediaType] = rttDict[mediaType] || [];
         transportInfoDict[mediaType] = transportInfoDict[mediaType] || [];
     }
 
