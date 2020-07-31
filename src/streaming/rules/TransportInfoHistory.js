@@ -180,6 +180,19 @@ function TransportInfoHistory(config) {
             transportInfoDict[mediaType].push(...transportInfo);
         }
 
+        const date = new Date();
+        const mss = settings.get().streaming.maximumSegmentSize;
+        transportInfo
+            .filter(filterValidThroughputSample)
+            .forEach(({ cwnd, rtt }) => {
+                window.transportThroughputHistory.push({
+                    quality: httpRequest._quality,
+                    value: cwnd * mss * 8 * (1000 / rtt) / 1000000,
+                    date,
+                    mediaType
+                });
+            });
+
         // Ensure all new dictionaries are clamped to maximum size
         transportInfoDict[mediaType] = transportInfoDict[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
     }
