@@ -100,6 +100,7 @@ function AbrController() {
             setElementSize();
         }
         eventBus.on(Events.METRIC_ADDED, onMetricAdded, this);
+        eventBus.on(Events.TRANSPORT_INFO_RETRIEVED, onTransportInfoRetrieved, this);
         eventBus.on(Events.PERIOD_SWITCH_COMPLETED, createAbrRulesCollection, this);
 
         throughputHistory = throughputHistory || ThroughputHistory(context).create({
@@ -150,6 +151,7 @@ function AbrController() {
         eventBus.off(Events.LOADING_PROGRESS, onFragmentLoadProgress, this);
         eventBus.off(Events.QUALITY_CHANGE_RENDERED, onQualityChangeRendered, this);
         eventBus.off(Events.METRIC_ADDED, onMetricAdded, this);
+        eventBus.off(Events.TRANSPORT_INFO_RETRIEVED, onTransportInfoRetrieved, this);
         eventBus.off(Events.PERIOD_SWITCH_COMPLETED, createAbrRulesCollection, this);
 
         if (abrRulesCollection) {
@@ -204,6 +206,12 @@ function AbrController() {
 
         if (e.metric === MetricsConstants.BUFFER_LEVEL && (e.mediaType === Constants.AUDIO || e.mediaType === Constants.VIDEO)) {
             updateIsUsingBufferOccupancyABR(e.mediaType, 0.001 * e.value.level);
+        }
+    }
+
+    function onTransportInfoRetrieved(e) {
+        if (e.mediaType && e.response) {
+            transportInfoHistory.push(e.mediaType, e.response);
         }
     }
 
