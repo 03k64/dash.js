@@ -65,6 +65,8 @@ function ScheduleController(config) {
         isFragmentProcessingInProgress,
         timeToLoadDelay,
         scheduleTimeout,
+        transportInfoTimeout,
+        transportInfoUrl,
         seekTarget,
         hasVideoTrack,
         bufferLevelRule,
@@ -131,6 +133,7 @@ function ScheduleController(config) {
         }
 
         startScheduleTimer(0);
+        startTransportInfoTimer();
     }
 
     function stop() {
@@ -139,6 +142,7 @@ function ScheduleController(config) {
         logger.debug('Schedule Controller stops');
         isStopped = true;
         clearTimeout(scheduleTimeout);
+        clearTimeout(transportInfoTimeout);
     }
 
     function hasTopQualityChanged(type, id) {
@@ -227,6 +231,32 @@ function ScheduleController(config) {
         }
     }
 
+    function getTransportInfo() {
+        clearTimeout(transportInfoTimeout);
+
+        if (!abrController ||
+            !abrController.hasOwnProperty('getTransportInfoHistory') ||
+            !abrController.getTransportInfoHistory()
+        ) {
+            // try again in 500ms
+            transportInfoTimeout = setTimeout(getTransportInfo, 500);
+        }
+
+        // do HEAD request to most recently requested URL
+        const tiRequests = Object
+              .entries(transportInfoUrl)
+              .map(([mediaType, url]) => fetch(url, { method: 'HEAD' }));
+
+        Promise.all(tiRequests).then(function (tiResponses) {
+            Object.keys(transportInfoUrl).forEach(function (mediaType, ix) {
+                const tiResponse = tiResponses[ix];
+                eventBus.trigger(Events.TRANSPORT_INFO_RETRIEVED, { response: { _responseHeaders: tiResponse.headers }, mediaType });
+            });
+        });
+
+        transportInfoTimeout = setTimeout(getTransportInfo, 500);
+    }
+
     function validateExecutedFragmentRequest() {
         // Validate that the fragment request executed and appended into the source buffer is as
         // good of quality as the current quality and is the correct media track.
@@ -271,6 +301,11 @@ function ScheduleController(config) {
         scheduleTimeout = setTimeout(schedule, value);
     }
 
+    function startTransportInfoTimer() {
+        clearTimeout(transportInfoTimeout);
+        transportInfoTimeout = setTimeout(getTransportInfo, 500);
+    }
+
     function setFragmentProcessState (state) {
         if (isFragmentProcessingInProgress !== state ) {
             isFragmentProcessingInProgress = state;
@@ -289,6 +324,7 @@ function ScheduleController(config) {
     function processMediaRequest(request) {
         if (request) {
             logger.debug('Next fragment request url is ' + request.url);
+            transportInfoUrl[request.mediaType] = request.url;
             fragmentModel.executeRequest(request);
         } else { // Use case - Playing at the bleeding live edge and frag is not available yet. Cycle back around.
             if (playbackController.getIsDynamic()) {
@@ -515,6 +551,7 @@ function ScheduleController(config) {
         replacingBuffer = false;
         mediaRequest = null;
         isReplacementRequest = false;
+        transportInfoUrl = {};
     }
 
     function reset() {
