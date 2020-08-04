@@ -70,6 +70,7 @@ function TransportInfoHistory(config) {
             return;
         }
 
+        // if headers is a CRLF-separated string, look for matching line and return value
         if (typeof headers === 'string') {
             const lcHeaders = headers.toLowerCase();
             const startIx = lcHeaders.indexOf(HEADER_KEY_LC) + HEADER_KEY_LC.length;
@@ -78,7 +79,12 @@ function TransportInfoHistory(config) {
             return headers.substring(startIx, endIx);
         }
 
-        // 'headers' is an object, look for matching key
+        // if headers is an instance of a class implementing the Headers interface returned directly from the fetch API
+        if (headers.hasOwnProperty('get') || headers.get) {
+            return headers.get('Transport-Info');
+        }
+
+        // else 'headers' is an object, look for matching key
         const key = HEADER_KEYS.map(key => headers.hasOwnProperty(key));
         if (key === null || key === undefined) {
             return;
