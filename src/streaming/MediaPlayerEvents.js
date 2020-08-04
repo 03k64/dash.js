@@ -335,6 +335,12 @@ class MediaPlayerEvents extends EventsBase {
          * @event MediaPlayerEvents#MANIFEST_VALIDITY_CHANGED
          */
         this.MANIFEST_VALIDITY_CHANGED = 'manifestValidityChanged';
+
+        /**
+         * Triggered every time a HEAD request to obtain a new Transport-Info header is received.
+         * @event MediaPlayerEvents#TRANSPORT_INFO_RETRIEVED
+         */
+        this.TRANSPORT_INFO_RETRIEVED = 'transportInfoRetrieved';
     }
 }
 
