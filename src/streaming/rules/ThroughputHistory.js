@@ -97,6 +97,7 @@ function ThroughputHistory(config) {
         window.throughputHistory.push({
             date: new Date(),
             quality: httpRequest._quality,
+            segmentSizeKbytes: downloadBytes / 1000,
             value: throughput / 1000,
             mediaType
         });
