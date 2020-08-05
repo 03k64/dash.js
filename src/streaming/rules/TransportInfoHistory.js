@@ -167,7 +167,7 @@ function TransportInfoHistory(config) {
         // Ensure all dictionaries are initialised
         checkSettingsForMediaType(mediaType);
 
-        const tiDstPort = transportInfo.length > 0 ? transportInfo[0].dstPort : NaN;
+        const tiDstPort = transportInfo.length > 0 ? transportInfo[0].dstport : NaN;
 
         if (isMediaSegmentRequest(httpRequest)) {
             // Always store transport-info data for media segment requests and update most recently
