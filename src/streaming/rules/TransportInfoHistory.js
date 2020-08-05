@@ -51,14 +51,27 @@ function TransportInfoHistory(config) {
 
     const settings = config.settings;
 
-    let transportInfoDict;
+    let transportInfoDict,
+        transportInfoPort;
 
     function reset() {
         transportInfoDict = {};
+        transportInfoPort = {};
     }
 
     function setup() {
         reset();
+    }
+
+    function sharesNetworkCharacteristics(mediaType, dstPort) {
+        return transportInfoPort &&
+            transportInfoPort[mediaType] &&
+            !isNaN(transportInfoPort[mediaType]) &&
+            transportInfoPort[mediaType] === dstPort;
+    }
+
+    function isMediaSegmentRequest(httpRequest) {
+        return httpRequest.hasOwnProperty('url');
     }
 
     function parseUnmodified(value) {
@@ -121,6 +134,12 @@ function TransportInfoHistory(config) {
             return;
         }
 
+        // Ensure a dstport is present for determining whether transport-info is related to media
+        // segment network flow
+        if (tiEntry.dstport === null || tiEntry.dstport === undefined) {
+            tiEntry.dstport = NaN;
+        }
+
         return tiEntry;
     }
 
@@ -148,8 +167,18 @@ function TransportInfoHistory(config) {
         // Ensure all dictionaries are initialised
         checkSettingsForMediaType(mediaType);
 
-        // Append all new measurements to their respective dictionaries
-        transportInfoDict[mediaType].push(...transportInfo);
+        const tiDstPort = transportInfo.length > 0 ? transportInfo[0].dstPort : NaN;
+
+        if (isMediaSegmentRequest(httpRequest)) {
+            // Always store transport-info data for media segment requests and update most recently
+            // seen port for media type
+            transportInfoDict[mediaType].push(...transportInfo);
+            transportInfoPort[mediaType] = tiDstPort;
+        } else if (sharesNetworkCharacteristics(mediaType, tiDstPort)) {
+            // Only store additional transport-info data if flow shares one used for media segment
+            // requests
+            transportInfoDict[mediaType].push(...transportInfo);
+        }
 
         // Ensure all new dictionaries are clamped to maximum size
         transportInfoDict[mediaType] = transportInfoDict[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
