@@ -184,6 +184,7 @@ function TransportInfoHistory(config) {
         const mss = settings.get().streaming.maximumSegmentSize;
         transportInfo
             .filter(filterValidThroughputSample)
+            .filter(({ dstport }) => sharesNetworkCharacteristics(mediaType, dstport))
             .forEach(({ cwnd, rtt }) => {
                 window.transportThroughputHistory.push({
                     quality: httpRequest._quality,
