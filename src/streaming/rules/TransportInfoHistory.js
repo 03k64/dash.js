@@ -184,8 +184,9 @@ function TransportInfoHistory(config) {
         transportInfoDict[mediaType] = transportInfoDict[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
     }
 
-    function estimateThroughputFromTransportInfo({ cwnd, rtt }) {
-        const mss = settings.get().streaming.maximumSegmentSize;
+    function estimateThroughputFromTransportInfo(transportInfo) {
+        const { cwnd, rtt } = transportInfo;
+        const mss = transportInfo.mss || settings.get().streaming.maximumSegmentSize;
 
         return cwnd * mss * 8 * (1000 / rtt);
     }
