@@ -94,14 +94,6 @@ function ThroughputHistory(config) {
         }
 
         const throughput = Math.round((8 * downloadBytes) / throughputMeasureTime); // bits/ms = kbits/s
-        window.throughputHistory.push({
-            date: new Date(),
-            quality: httpRequest._quality,
-            segmentSizeKbytes: downloadBytes / 1000,
-            value: throughput / 1000,
-            mediaType
-        });
-
         checkSettingsForMediaType(mediaType);
 
         if (isCachedResponse(mediaType, latencyTimeInMilliseconds, downloadTimeInMilliseconds)) {

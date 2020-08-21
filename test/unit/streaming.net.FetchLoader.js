@@ -7,14 +7,6 @@ const context = {};
 let fetchLoader;
 
 describe('FetchLoader', function () {
-    beforeEach(function () {
-        if (typeof window == 'undefined') {
-            global.window = {
-                calculateDownloadedTimeHistory: []
-            };
-        }
-    });
-
     it('should calculate the proper download time based on fetch proggress datum', () => {
         fetchLoader = FetchLoader(context).create({
         });

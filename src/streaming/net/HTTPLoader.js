@@ -160,7 +160,6 @@ function HTTPLoader(cfg) {
                 if (!event.lengthComputable ||
                     (event.lengthComputable && event.total !== event.loaded)) {
                     request.firstByteDate = currentTime;
-                    window.httpFirstByteHistory.push({ date: currentTime, url: httpRequest.url, value: currentTime });
                 }
             }
 
