@@ -41,7 +41,6 @@ import RulesContext from '../rules/RulesContext';
 import SwitchRequest from '../rules/SwitchRequest';
 import SwitchRequestHistory from '../rules/SwitchRequestHistory';
 import DroppedFramesHistory from '../rules/DroppedFramesHistory';
-import ThroughputHistory from '../rules/ThroughputHistory';
 import TransportInfoHistory from '../rules/TransportInfoHistory';
 import Debug from '../../core/Debug';
 import { HTTPRequest } from '../vo/metrics/HTTPRequest';
@@ -76,7 +75,6 @@ function AbrController() {
         playbackIndex,
         switchHistoryDict,
         droppedFramesHistory,
-        throughputHistory,
         transportInfoHistory,
         isUsingBufferOccupancyABRDict,
         dashMetrics,
@@ -102,10 +100,6 @@ function AbrController() {
         eventBus.on(Events.METRIC_ADDED, onMetricAdded, this);
         eventBus.on(Events.TRANSPORT_INFO_RETRIEVED, onTransportInfoRetrieved, this);
         eventBus.on(Events.PERIOD_SWITCH_COMPLETED, createAbrRulesCollection, this);
-
-        throughputHistory = throughputHistory || ThroughputHistory(context).create({
-            settings: settings
-        });
 
         transportInfoHistory = transportInfoHistory || TransportInfoHistory(context).create({
             settings: settings
@@ -138,7 +132,6 @@ function AbrController() {
         }
         playbackIndex = undefined;
         droppedFramesHistory = undefined;
-        throughputHistory = undefined;
         transportInfoHistory = undefined;
         clearTimeout(abandonmentTimeout);
         abandonmentTimeout = null;
@@ -200,7 +193,6 @@ function AbrController() {
 
     function onMetricAdded(e) {
         if (e.metric === MetricsConstants.HTTP_REQUEST && e.value && e.value.type === HTTPRequest.MEDIA_SEGMENT_TYPE && (e.mediaType === Constants.AUDIO || e.mediaType === Constants.VIDEO)) {
-            throughputHistory.push(e.mediaType, e.value, settings.get().streaming.abr.useDeadTimeLatency);
             transportInfoHistory.push(e.mediaType, e.value);
         }
 
@@ -381,7 +373,7 @@ function AbrController() {
             }
             setQualityFor(type, id, newQuality);
             eventBus.trigger(Events.QUALITY_CHANGE_REQUESTED, {mediaType: type, streamInfo: streamInfo, oldQuality: oldQuality, newQuality: newQuality, reason: reason});
-            const bitrate = throughputHistory.getAverageThroughput(type);
+            const bitrate = transportInfoHistory.getAverageThroughput(type);
             if (!isNaN(bitrate)) {
                 domStorage.setSavedBitrateSettings(type, bitrate);
             }
@@ -490,7 +482,7 @@ function AbrController() {
     }
 
     function getThroughputHistory() {
-        return throughputHistory;
+        return transportInfoHistory;
     }
 
     function getTransportInfoHistory() {
