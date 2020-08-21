@@ -133,7 +133,10 @@ function ScheduleController(config) {
         }
 
         startScheduleTimer(0);
-        startTransportInfoTimer();
+
+        if (settings.get().streaming.useAdditionalTransportInfoRequests) {
+            startTransportInfoTimer();
+        }
     }
 
     function stop() {
