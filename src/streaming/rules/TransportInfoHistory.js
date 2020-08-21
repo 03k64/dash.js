@@ -29,6 +29,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
+import Constants from '../constants/Constants';
 import FactoryMaker from '../../core/FactoryMaker';
 
 function TransportInfoHistory(config) {
@@ -46,20 +47,43 @@ function TransportInfoHistory(config) {
         send_rate: parseFloat,
         ts: Date.parse
     };
+
+    // sliding window constants
     const MAX_MEASUREMENTS_TO_KEEP = 100;
-    const SLIDING_WINDOW_SAMPLE_SIZE = 4;
+    const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE = 3;
+    const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_VOD = 4;
+    const AVERAGE_LATENCY_SAMPLE_AMOUNT = 4;
+    const THROUGHPUT_DECREASE_SCALE = 1.3;
+    const THROUGHPUT_INCREASE_SCALE = 1.3;
+
+    // EWMA constants
+    const EWMA_THROUGHPUT_SLOW_HALF_LIFE_SECONDS = 8;
+    const EWMA_THROUGHPUT_FAST_HALF_LIFE_SECONDS = 3;
+    const EWMA_LATENCY_SLOW_HALF_LIFE_COUNT = 2;
+    const EWMA_LATENCY_FAST_HALF_LIFE_COUNT = 1;
+    const EWMA_MEDIA_SEGMENT_HEADER_WEIGHT = 1;
+    const EWMA_HEAD_REQUEST_HEADER_WEIGHT = 1;
 
     const settings = config.settings;
 
-    let transportInfoDict,
+    let ewmaHalfLife,
+        ewmaThroughputDict,
+        ewmaLatencyDict,
+        transportInfoDict,
         transportInfoPort;
 
     function reset() {
+        ewmaHalfLife = {};
         transportInfoDict = {};
         transportInfoPort = {};
     }
 
     function setup() {
+        ewmaHalfLife = {
+            throughputHalfLife: { fast: EWMA_THROUGHPUT_FAST_HALF_LIFE_SECONDS, slow: EWMA_THROUGHPUT_SLOW_HALF_LIFE_SECONDS },
+            latencyHalfLife:    { fast: EWMA_LATENCY_FAST_HALF_LIFE_COUNT,      slow: EWMA_LATENCY_SLOW_HALF_LIFE_COUNT }
+        };
+
         reset();
     }
 
@@ -167,21 +191,38 @@ function TransportInfoHistory(config) {
         // Ensure all dictionaries are initialised
         checkSettingsForMediaType(mediaType);
 
+        let ewmaWeight = NaN;
         const tiDstPort = transportInfo.length > 0 ? transportInfo[0].dstport : NaN;
 
         if (isMediaSegmentRequest(httpRequest)) {
             // Always store transport-info data for media segment requests and update most recently
             // seen port for media type
+            ewmaWeight = EWMA_MEDIA_SEGMENT_HEADER_WEIGHT;
             transportInfoDict[mediaType].push(...transportInfo);
             transportInfoPort[mediaType] = tiDstPort;
         } else if (sharesNetworkCharacteristics(mediaType, tiDstPort)) {
             // Only store additional transport-info data if flow shares one used for media segment
             // requests
+            ewmaWeight = EWMA_HEAD_REQUEST_HEADER_WEIGHT;
             transportInfoDict[mediaType].push(...transportInfo);
         }
 
         // Ensure all new dictionaries are clamped to maximum size
         transportInfoDict[mediaType] = transportInfoDict[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
+
+        // Update EWMA estimates for each transport info sample
+        transportInfo.forEach(sample => {
+            const throughput = filterValidThroughputSample(sample) ? estimateThroughputFromTransportInfo(sample) : NaN;
+            const latency = filterValidLatencySample(sample) ? sample.rtt : NaN;
+
+            if (!isNaN(throughput)) {
+                updateEwmaEstimate(ewmaThroughputDict[mediaType], throughput, ewmaWeight, ewmaHalfLife.throughput);
+            }
+
+            if (!isNaN(latency)) {
+                updateEwmaEstimate(ewmaLatencyDict[mediaType], latency, ewmaWeight, ewmaHalfLife.latency);
+            }
+        });
     }
 
     function estimateThroughputFromTransportInfo(transportInfo) {
@@ -200,40 +241,105 @@ function TransportInfoHistory(config) {
             !isNaN(rtt);
     }
 
-    function getAverageThroughput(mediaType) {
-        const samples = transportInfoDict[mediaType];
-        if (samples === null || samples === undefined || samples.length === 0) {
-            return 0;
+    function filterValidLatencySample({ rtt }) {
+        return rtt !== null &&
+            rtt !== undefined &&
+            !isNaN(rtt);
+    }
+
+    function updateEwmaEstimate(ewmaObj, value, weight, halfLife) {
+        const fastAlpha = Math.pow(0.5, weight / halfLife.fast);
+        ewmaObj.fastEstimate = (1 - fastAlpha) * value + fastAlpha * ewmaObj.fastEstimate;
+
+        const slowAlpha = Math.pow(0.5, weight / halfLife.slow);
+        ewmaObj.slowEstimate = (1 - slowAlpha) * value + slowAlpha * ewmaObj.slowEstimate;
+
+        ewmaObj.totalWeight += weight;
+    }
+
+    function getAverageEwma(isThroughput, mediaType) {
+        const ewmaObj = isThroughput ? ewmaThroughputDict[mediaType] : ewmaLatencyDict[mediaType];
+
+        if (!ewmaObj || ewmaObj.totalWeight <= 0) {
+            return NaN;
         }
 
-        const validSamples = samples.filter(filterValidThroughputSample);
-        if (validSamples.length === 0) {
-            return 0;
+        const fastEstimate = ewmaObj.fastEstimate / (1 - Math.pow(0.5, ewmaObj.totalWeight / ewmaHalfLife.fast));
+        const slowEstimate = ewmaObj.slowEstimate / (1 - Math.pow(0.5, ewmaObj.totalWeight / ewmaHalfLife.slow));
+        return isThroughput ? Math.min(fastEstimate, slowEstimate) : Math.max(fastEstimate, slowEstimate);
+    }
+
+    function getSampleSize(isThroughput, mediaType, isLive) {
+        let arr,
+            sampleSize;
+
+        if (isThroughput) {
+            arr = transportInfoDict[mediaType];
+            sampleSize = isLive ? AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE : AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_VOD;
+        } else {
+            arr = transportInfoDict[mediaType];
+            sampleSize = AVERAGE_LATENCY_SAMPLE_AMOUNT;
         }
 
-        const totalThroughputEstimate = validSamples
-            .slice(-SLIDING_WINDOW_SAMPLE_SIZE)
-            .map(estimateThroughputFromTransportInfo)
-            .reduce((sum, sample) => sum + sample);
+        if (!arr) {
+            sampleSize = 0;
+        } else if (sampleSize >= arr.length) {
+            sampleSize = arr.length;
+        } else if (isThroughput) {
+            // if throughput samples vary a lot, average over a wider sample
+            for (let i = 1; i < sampleSize; ++i) {
+                const currThroughput = estimateThroughputFromTransportInfo(arr[arr.length - i]);
+                const prevThroughput = estimateThroughputFromTransportInfo(arr[arr.length - i - 1]);
 
-        return totalThroughputEstimate / SLIDING_WINDOW_SAMPLE_SIZE / 1000;
+                const ratio = currThroughput / prevThroughput;
+                if (ratio >= THROUGHPUT_INCREASE_SCALE || ratio <= 1 / THROUGHPUT_DECREASE_SCALE) {
+                    sampleSize += 1;
+                    if (sampleSize === arr.length) { // cannot increase sampleSize beyond arr.length
+                        break;
+                    }
+                }
+            }
+        }
+
+        return sampleSize;
+    }
+
+    function getAverageSlidingWindow(isThroughput, mediaType, isDynamic) {
+        const estimator = isThroughput ? estimateThroughputFromTransportInfo : ({ rtt }) => rtt;
+        const filter = isThroughput ? filterValidThroughputSample : filterValidLatencySample;
+
+        const sampleSize = getSampleSize(isThroughput, mediaType, isDynamic);
+        const arr = transportInfoDict[mediaType].filter(filter);
+
+        if (sampleSize === 0 || !arr || arr.length === 0) {
+            return NaN;
+        }
+
+        return arr
+            .slice(-sampleSize)
+            .map(estimator)
+            .reduce((sum, sample) => sum + sample) / arr.length;
+    }
+
+    function getAverage(isThroughput, mediaType, isDynamic) {
+        return settings.get().streaming.abr.movingAverageMethod !== Constants.MOVING_AVERAGE_SLIDING_WINDOW ?
+            getAverageEwma(isThroughput, mediaType) : getAverageSlidingWindow(isThroughput, mediaType, isDynamic);
     }
 
     function getAverageLatency(mediaType) {
-        const samples = transportInfoDict[mediaType];
-        if (samples === null || samples === undefined || samples.length === 0) {
-            return 0;
+        return getAverage(false, mediaType);
+    }
+
+    function getAverageThroughput(mediaType, isDynamic) {
+        return getAverage(true, mediaType, isDynamic);
+    }
+
+    function getSafeAverageThroughput(mediaType, isDynamic) {
+        let average = getAverageThroughput(mediaType, isDynamic);
+        if (!isNaN(average)) {
+            average *= settings.get().streaming.abr.bandwidthSafetyFactor;
         }
-
-        const validSamples = samples
-              .filter(({ rtt }) => rtt !== null && rtt !== undefined && !isNaN(rtt))
-              .map(({ rtt }) => rtt);
-
-        if (validSamples.length === 0) {
-            return 0;
-        }
-
-        return validSamples.slice(-SLIDING_WINDOW_SAMPLE_SIZE).reduce((sum, sample) => sum + sample) / SLIDING_WINDOW_SAMPLE_SIZE;
+        return average;
     }
 
     function checkSettingsForMediaType(mediaType) {
@@ -242,8 +348,9 @@ function TransportInfoHistory(config) {
 
     const instance = {
         push: push,
-        getAverageThroughput: getAverageThroughput,
         getAverageLatency: getAverageLatency,
+        getAverageThroughput: getAverageThroughput,
+        getSafeAverageThroughput: getSafeAverageThroughput,
         reset: reset
     };
 
