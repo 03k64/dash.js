@@ -87,9 +87,6 @@ function FetchLoader(cfg) {
         };
 
         fetch(httpRequest.url, reqOptions).then(function (response) {
-            const firstByte = new Date();
-            window.fetchFirstByteHistory.push({ date: firstByte, url: httpRequest.url, value: firstByte });
-
             if (!httpRequest.response) {
                 httpRequest.response = {};
             }
@@ -101,14 +98,11 @@ function FetchLoader(cfg) {
                 httpRequest.onerror();
             }
 
-            const headersStart = window.performance.now();
             let responseHeaders = '';
             for (const key of response.headers.keys()) {
                 responseHeaders += key + ': ' + response.headers.get(key) + '\r\n';
             }
             httpRequest.response.responseHeaders = responseHeaders;
-            const headersEnd = window.performance.now();
-            let headersTime = headersEnd - headersStart;
 
             if (!response.body) {
                 // Fetch returning a ReadableStream response body is not currently supported by all browsers.
@@ -138,64 +132,29 @@ function FetchLoader(cfg) {
             let downLoadedData = [];
 
             const processResult = function ({value, done}) {
-                const processResultStart = window.performance.now();
-
-                let arrayOpsTime = 0;
-                let calculateDownloadedTimeTime = 0;
-                let concatTypedArrayTime = 0;
-                let findLastTopIsoBoxCompletedTime = 0;
-                let httpRequestProgressTime = 0;
-                let valueLength = 0;
-
                 if (done) {
                     if (remaining) {
                         // If there is pending data, call progress so network metrics
                         // are correctly generated
                         // Same structure as https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequestEventTarget/onprogress
-                        const httpRequestProgressStart = window.performance.now();
                         httpRequest.progress({
                             loaded: bytesReceived,
                             total: isNaN(totalBytes) ? bytesReceived : totalBytes,
                             lengthComputable: true,
-                            time: calculateDownloadedTime(downLoadedData, bytesReceived, httpRequest.request.startTime, httpRequest.request.mediaType),
+                            time: calculateDownloadedTime(downLoadedData, bytesReceived),
                             stream: true
                         });
-                        const httpRequestProgressEnd = window.performance.now();
-                        httpRequestProgressTime = httpRequestProgressEnd - httpRequestProgressStart;
 
                         httpRequest.response.response = remaining.buffer;
                     }
                     httpRequest.onload();
                     httpRequest.onend();
 
-                    const processResultEnd = window.performance.now();
-
-                    window.processResultHistory.push({
-                        date: new Date(),
-                        mediaType: httpRequest.request.mediaType,
-                        processResultTime: processResultEnd - processResultStart,
-                        quality: httpRequest.request.quality,
-                        segmentStartTime: httpRequest.request.startTime,
-                        arrayOpsTime,
-                        calculateDownloadedTimeTime,
-                        concatTypedArrayTime,
-                        done,
-                        findLastTopIsoBoxCompletedTime,
-                        headersTime,
-                        httpRequestProgressTime,
-                        valueLength
-                    });
-
-                    headersTime = 0;
-
                     return;
                 }
 
                 if (value && value.length > 0) {
-                    const concatTypedArrayStart = window.performance.now();
                     remaining = concatTypedArray(remaining, value);
-                    const concatTypedArrayEnd = window.performance.now();
-                    concatTypedArrayTime = concatTypedArrayEnd - concatTypedArrayStart;
 
                     bytesReceived += value.length;
                     downLoadedData.push({
@@ -203,10 +162,7 @@ function FetchLoader(cfg) {
                         bytes: value.length
                     });
 
-                    const findLastTopIsoBoxCompletedStart = window.performance.now();
                     const boxesInfo = boxParser.findLastTopIsoBoxCompleted(['moov', 'mdat'], remaining, offset);
-                    const findLastTopIsoBoxCompletedEnd = window.performance.now();
-                    findLastTopIsoBoxCompletedTime = findLastTopIsoBoxCompletedEnd - findLastTopIsoBoxCompletedStart;
 
                     if (boxesInfo.found) {
                         const end = boxesInfo.lastCompletedOffset + boxesInfo.size;
@@ -217,7 +173,6 @@ function FetchLoader(cfg) {
                         // keeps a reference to the original data
                         let data;
 
-                        const arrayOpsStart = window.performance.now();
                         if (end === remaining.length) {
                             data = remaining;
                             remaining = new Uint8Array();
@@ -225,19 +180,14 @@ function FetchLoader(cfg) {
                             data = new Uint8Array(remaining.subarray(0, end));
                             remaining = remaining.subarray(end);
                         }
-                        const arrayOpsEnd = window.performance.now();
-                        arrayOpsTime = arrayOpsEnd - arrayOpsStart;
 
                         // Announce progress but don't track traces. Throughput measures are quite unstable
                         // when they are based in small amount of data
-                        const httpRequestProgressStart = window.performance.now();
                         httpRequest.progress({
                             data: data.buffer,
                             lengthComputable: false,
                             noTrace: true
                         });
-                        const httpRequestProgressEnd = window.performance.now();
-                        httpRequestProgressTime = httpRequestProgressEnd - httpRequestProgressStart;
 
                         offset = 0;
                     } else {
@@ -246,38 +196,15 @@ function FetchLoader(cfg) {
                         // Call progress so it generates traces that will be later used to know when the first byte
                         // were received
                         if (!signaledFirstByte) {
-                            const httpRequestProgressStart = window.performance.now();
                             httpRequest.progress({
                                 lengthComputable: false,
                                 noTrace: true
                             });
-                            const httpRequestProgressEnd = window.performance.now();
-                            httpRequestProgressTime = httpRequestProgressEnd - httpRequestProgressStart;
 
                             signaledFirstByte = true;
                         }
                     }
                 }
-
-                const processResultEnd = window.performance.now();
-
-                window.processResultHistory.push({
-                    date: new Date(),
-                    mediaType: httpRequest.request.mediaType,
-                    processResultTime: processResultEnd - processResultStart,
-                    quality: httpRequest.request.quality,
-                    segmentStartTime: httpRequest.request.startTime,
-                    valueLength: value.length,
-                    arrayOpsTime,
-                    calculateDownloadedTimeTime,
-                    concatTypedArrayTime,
-                    done,
-                    findLastTopIsoBoxCompletedTime,
-                    headersTime,
-                    httpRequestProgressTime
-                });
-
-                headersTime = 0;
 
                 read(httpRequest, processResult);
             };
@@ -333,23 +260,9 @@ function FetchLoader(cfg) {
     //     (ie. where the chunk was small enough to have introduced measurement inaccuracy)
     // Filter out those chunks which were received _more_ than the average amount of time apart
     //     (ie. where gaps in transmission may have occurred)
-    function calculateDownloadedTime(datum, bytesReceived, segmentStartTime, mediaType) {
-        let totalChunks = datum.length;
-        let chunkSizes = datum.map(d => d.bytes);
-        let chunkDeltas = datum.map((d, i) => i === 0 ? 0 : d.ts - datum[i - 1].ts);
-        let sizeFilterRemovedChunkIndices = [];
-        let timeFilterIgnoredChunkIndices = [];
-
+    function calculateDownloadedTime(datum, bytesReceived) {
         const bytesThreshold = (bytesReceived / 4) / datum.length;
-
-        datum = datum.filter((data, ix) => {
-            if (data.bytes > bytesThreshold) {
-                return true;
-            } else {
-                sizeFilterRemovedChunkIndices.push(ix);
-                return false;
-            }
-        });
+        datum = datum.filter(data => data.bytes > bytesThreshold);
 
         if (datum.length > 1) {
             let time = 0;
@@ -361,38 +274,12 @@ function FetchLoader(cfg) {
                     const distance = next.ts - data.ts;
                     if (distance < avgTimeDistance) {
                         time += distance;
-                    } else {
-                        timeFilterIgnoredChunkIndices.push(index);
                     }
                 }
             });
 
-            window.calculateDownloadedTimeHistory.push({
-                date: new Date(),
-                chunksUtilised: totalChunks - sizeFilterRemovedChunkIndices.length - timeFilterIgnoredChunkIndices.length,
-                chunkDeltas,
-                chunkSizes,
-                mediaType,
-                segmentStartTime,
-                sizeFilterRemovedChunkIndices,
-                timeFilterIgnoredChunkIndices,
-                totalChunks
-            });
-
             return time;
         }
-
-        window.calculateDownloadedTimeHistory.push({
-            date: new Date(),
-            chunksUtilised: totalChunks - sizeFilterRemovedChunkIndices.length - timeFilterIgnoredChunkIndices.length,
-            chunkDeltas,
-            chunkSizes,
-            mediaType,
-            segmentStartTime,
-            sizeFilterRemovedChunkIndices,
-            timeFilterIgnoredChunkIndices,
-            totalChunks
-        });
 
         return null;
     }
