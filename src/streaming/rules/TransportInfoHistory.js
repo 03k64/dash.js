@@ -309,11 +309,13 @@ function TransportInfoHistory(config) {
         const filter = isThroughput ? filterValidThroughputSample : filterValidLatencySample;
 
         const sampleSize = getSampleSize(isThroughput, mediaType, isDynamic);
-        const arr = transportInfoDict[mediaType].filter(filter);
+        const mediaTypeArr = transportInfoDict[mediaType];
 
-        if (sampleSize === 0 || !arr || arr.length === 0) {
+        if (sampleSize === 0 || !mediaTypeArr || mediaTypeArr.length === 0) {
             return NaN;
         }
+
+        const arr = mediaTypeArr.filter(filter);
 
         return arr
             .slice(-sampleSize)
