@@ -35,6 +35,8 @@ import FactoryMaker from '../../core/FactoryMaker';
 function TransportInfoHistory(config) {
     config = config || {};
 
+    const US_PER_S = 1000000;
+
     const HEADER_KEYS = ['Transport-Info', 'transport-info'];
     const HEADER_KEY_LC = 'transport-info: ';
     const FIELD_PARSERS = {
@@ -67,14 +69,19 @@ function TransportInfoHistory(config) {
     const settings = config.settings;
 
     let ewmaHalfLife,
-        ewmaThroughputDict,
         ewmaLatencyDict,
-        transportInfoDict,
+        ewmaThroughputDict,
+        latencyHistory,
+        throughputHistory,
+        transportInfoHistory,
         transportInfoPort;
 
     function reset() {
-        ewmaHalfLife = {};
-        transportInfoDict = {};
+        ewmaLatencyDict = {};
+        ewmaThroughputDict = {};
+        latencyHistory = {};
+        throughputHistory = {};
+        transportInfoHistory = {};
         transportInfoPort = {};
     }
 
@@ -85,6 +92,25 @@ function TransportInfoHistory(config) {
         };
 
         reset();
+    }
+
+    function pushMetricsFromSample(ewmaWeight, mediaType, sample) {
+        const latency = filterValidLatencySample(sample) ? sample.rtt : NaN;
+        const throughput = filterValidThroughputSample(sample) ? estimateThroughputFromTransportInfo(sample) : NaN;
+
+        if (!isNaN(latency)) {
+            const latencyMs = latency / 1000;
+            latencyHistory[mediaType].push(latencyMs);
+            updateEwmaEstimate(ewmaLatencyDict[mediaType], latencyMs, ewmaWeight, ewmaHalfLife.latencyHalfLife);
+        }
+
+        if (!isNaN(throughput)) {
+            const throughputKbps = throughput / 1000;
+            throughputHistory[mediaType].push(throughputKbps);
+            updateEwmaEstimate(ewmaThroughputDict[mediaType], throughputKbps, ewmaWeight, ewmaHalfLife.throughputHalfLife);
+        }
+
+        transportInfoHistory[mediaType].push(sample);
     }
 
     function sharesNetworkCharacteristics(mediaType, dstPort) {
@@ -191,45 +217,30 @@ function TransportInfoHistory(config) {
         // Ensure all dictionaries are initialised
         checkSettingsForMediaType(mediaType);
 
-        let ewmaWeight = NaN;
         const tiDstPort = transportInfo.length > 0 ? transportInfo[0].dstport : NaN;
 
         if (isMediaSegmentRequest(httpRequest)) {
             // Always store transport-info data for media segment requests and update most recently
             // seen port for media type
-            ewmaWeight = EWMA_MEDIA_SEGMENT_HEADER_WEIGHT;
-            transportInfoDict[mediaType].push(...transportInfo);
+            transportInfo.forEach(sample => pushMetricsFromSample(EWMA_MEDIA_SEGMENT_HEADER_WEIGHT, mediaType, sample));
             transportInfoPort[mediaType] = tiDstPort;
         } else if (sharesNetworkCharacteristics(mediaType, tiDstPort)) {
             // Only store additional transport-info data if flow shares one used for media segment
             // requests
-            ewmaWeight = EWMA_HEAD_REQUEST_HEADER_WEIGHT;
-            transportInfoDict[mediaType].push(...transportInfo);
+            transportInfo.forEach(sample => pushMetricsFromSample(EWMA_HEAD_REQUEST_HEADER_WEIGHT, mediaType, sample));
         }
 
         // Ensure all new dictionaries are clamped to maximum size
-        transportInfoDict[mediaType] = transportInfoDict[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
-
-        // Update EWMA estimates for each transport info sample
-        transportInfo.forEach(sample => {
-            const throughput = filterValidThroughputSample(sample) ? estimateThroughputFromTransportInfo(sample) : NaN;
-            const latency = filterValidLatencySample(sample) ? sample.rtt : NaN;
-
-            if (!isNaN(throughput)) {
-                updateEwmaEstimate(ewmaThroughputDict[mediaType], throughput, ewmaWeight, ewmaHalfLife.throughput);
-            }
-
-            if (!isNaN(latency)) {
-                updateEwmaEstimate(ewmaLatencyDict[mediaType], latency, ewmaWeight, ewmaHalfLife.latency);
-            }
-        });
+        latencyHistory[mediaType] = latencyHistory[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
+        throughputHistory[mediaType] = throughputHistory[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
+        transportInfoHistory[mediaType] = transportInfoHistory[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
     }
 
     function estimateThroughputFromTransportInfo(transportInfo) {
         const { cwnd, rtt } = transportInfo;
         const mss = transportInfo.mss || settings.get().streaming.maximumSegmentSize;
 
-        return cwnd * mss * 8 * (1000 / rtt);
+        return cwnd * mss * 8 * (US_PER_S / rtt);
     }
 
     function filterValidThroughputSample({ cwnd, rtt }) {
@@ -258,14 +269,16 @@ function TransportInfoHistory(config) {
     }
 
     function getAverageEwma(isThroughput, mediaType) {
+        const { latencyHalfLife, throughputHalfLife } = ewmaHalfLife;
+        const halfLife = isThroughput ? throughputHalfLife : latencyHalfLife;
         const ewmaObj = isThroughput ? ewmaThroughputDict[mediaType] : ewmaLatencyDict[mediaType];
 
         if (!ewmaObj || ewmaObj.totalWeight <= 0) {
             return NaN;
         }
 
-        const fastEstimate = ewmaObj.fastEstimate / (1 - Math.pow(0.5, ewmaObj.totalWeight / ewmaHalfLife.fast));
-        const slowEstimate = ewmaObj.slowEstimate / (1 - Math.pow(0.5, ewmaObj.totalWeight / ewmaHalfLife.slow));
+        const fastEstimate = ewmaObj.fastEstimate / (1 - Math.pow(0.5, ewmaObj.totalWeight / halfLife.fast));
+        const slowEstimate = ewmaObj.slowEstimate / (1 - Math.pow(0.5, ewmaObj.totalWeight / halfLife.slow));
         return isThroughput ? Math.min(fastEstimate, slowEstimate) : Math.max(fastEstimate, slowEstimate);
     }
 
@@ -274,10 +287,10 @@ function TransportInfoHistory(config) {
             sampleSize;
 
         if (isThroughput) {
-            arr = transportInfoDict[mediaType];
+            arr = throughputHistory[mediaType];
             sampleSize = isLive ? AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE : AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_VOD;
         } else {
-            arr = transportInfoDict[mediaType];
+            arr = latencyHistory[mediaType];
             sampleSize = AVERAGE_LATENCY_SAMPLE_AMOUNT;
         }
 
@@ -288,10 +301,7 @@ function TransportInfoHistory(config) {
         } else if (isThroughput) {
             // if throughput samples vary a lot, average over a wider sample
             for (let i = 1; i < sampleSize; ++i) {
-                const currThroughput = estimateThroughputFromTransportInfo(arr[arr.length - i]);
-                const prevThroughput = estimateThroughputFromTransportInfo(arr[arr.length - i - 1]);
-
-                const ratio = currThroughput / prevThroughput;
+                const ratio = arr[arr.length - i] / arr[arr.length - i - 1];
                 if (ratio >= THROUGHPUT_INCREASE_SCALE || ratio <= 1 / THROUGHPUT_DECREASE_SCALE) {
                     sampleSize += 1;
                     if (sampleSize === arr.length) { // cannot increase sampleSize beyond arr.length
@@ -305,21 +315,16 @@ function TransportInfoHistory(config) {
     }
 
     function getAverageSlidingWindow(isThroughput, mediaType, isDynamic) {
-        const estimator = isThroughput ? estimateThroughputFromTransportInfo : ({ rtt }) => rtt;
-        const filter = isThroughput ? filterValidThroughputSample : filterValidLatencySample;
-
         const sampleSize = getSampleSize(isThroughput, mediaType, isDynamic);
-        const mediaTypeArr = transportInfoDict[mediaType];
+        const history = isThroughput ? throughputHistory : latencyHistory;
+        const arr = history[mediaType];
 
-        if (sampleSize === 0 || !mediaTypeArr || mediaTypeArr.length === 0) {
+        if (sampleSize === 0 || !arr || arr.length === 0) {
             return NaN;
         }
 
-        const arr = mediaTypeArr.filter(filter);
-
         return arr
             .slice(-sampleSize)
-            .map(estimator)
             .reduce((sum, sample) => sum + sample) / arr.length;
     }
 
@@ -345,7 +350,11 @@ function TransportInfoHistory(config) {
     }
 
     function checkSettingsForMediaType(mediaType) {
-        transportInfoDict[mediaType] = transportInfoDict[mediaType] || [];
+        ewmaThroughputDict[mediaType] = ewmaThroughputDict[mediaType] || {fastEstimate: 0, slowEstimate: 0, totalWeight: 0};
+        ewmaLatencyDict[mediaType] = ewmaLatencyDict[mediaType] || {fastEstimate: 0, slowEstimate: 0, totalWeight: 0};
+        latencyHistory[mediaType] = latencyHistory[mediaType] || [];
+        throughputHistory[mediaType] = throughputHistory[mediaType] || [];
+        transportInfoHistory[mediaType] = transportInfoHistory[mediaType] || [];
     }
 
     const instance = {
