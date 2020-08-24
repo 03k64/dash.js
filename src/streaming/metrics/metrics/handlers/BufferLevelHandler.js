@@ -95,10 +95,9 @@ function BufferLevelHandler(config) {
     }
 
     function handleNewMetric(metric, vo, type) {
-
         if (metric === metricsConstants.BUFFER_LEVEL) {
             const isTextVo = type === Constants.FRAGMENTED_TEXT || type === Constants.TEXT;
-            const storeTextVo = isTextVo && (textController.isTextEnabled() || false);
+            const storeTextVo = isTextVo && ((textController.hasOwnProperty('isTextEnabled') && textController.isTextEnabled()) || false);
 
             if (!isTextVo || storeTextVo) {
                 storedVOs[type] = vo;
