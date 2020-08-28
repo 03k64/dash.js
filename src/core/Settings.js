@@ -54,6 +54,7 @@ import {HTTPRequest} from '../streaming/vo/metrics/HTTPRequest';
  *      streaming: {
  *          maximumSegmentSize: 1460,
  *          useAdditionalTransportInfoRequests: false,
+ *          useTrailingTransportInfoRequests: false,
  *          metricsMaxListDepth: 1000,
  *          abandonLoadTimeout: 10000,
  *          liveDelayFragmentCount: NaN,
@@ -210,7 +211,8 @@ import {HTTPRequest} from '../streaming/vo/metrics/HTTPRequest';
 /**
  * @typedef {Object} StreamingSettings
  * @property {number} [maximumSegmentSize=1460] MSS value used for the downstream connection (ie. from video server to client browser)
- * @property {number} [useAdditionalTransportInfoRequests=false,] Sets whether additional HEAD requests should be made to obtain intra-segment transport-info headers.
+ * @property {number} [useAdditionalTransportInfoRequests=false] Sets whether additional HEAD requests should be made to obtain intra-segment transport-info headers at regular intervals.
+ * @property {number} [useTrailingTransportInfoRequests=false] Sets whether additional HEAD requests should be made to obtain intra-segment transport-info headers immediately following regularly scheduled requests.
  * @property {number} [metricsMaxListDepth=1000] Maximum list depth of metrics.
  * @property {number} [abandonLoadTimeout=10000]
  * A timeout value in seconds, which during the ABRController will block switch-up events.
@@ -394,6 +396,7 @@ function Settings() {
         streaming: {
             maximumSegmentSize: 1460,
             useAdditionalTransportInfoRequests: false,
+            useTrailingTransportInfoRequests: false,
             metricsMaxListDepth: 1000,
             abandonLoadTimeout: 10000,
             liveDelayFragmentCount: NaN,

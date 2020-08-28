@@ -30,6 +30,7 @@
  */
 
 import Constants from '../constants/Constants';
+import Debug from '../../core/Debug';
 import FactoryMaker from '../../core/FactoryMaker';
 
 function TransportInfoHistory(config) {
@@ -66,12 +67,15 @@ function TransportInfoHistory(config) {
     const EWMA_MEDIA_SEGMENT_HEADER_WEIGHT = 1;
     const EWMA_HEAD_REQUEST_HEADER_WEIGHT = 1;
 
+    const context = this.context;
     const settings = config.settings;
 
     let ewmaHalfLife,
         ewmaLatencyDict,
         ewmaThroughputDict,
+        instance,
         latencyHistory,
+        logger,
         throughputHistory,
         transportInfoHistory,
         transportInfoPort;
@@ -91,7 +95,19 @@ function TransportInfoHistory(config) {
             latencyHalfLife:    { fast: EWMA_LATENCY_FAST_HALF_LIFE_COUNT,      slow: EWMA_LATENCY_SLOW_HALF_LIFE_COUNT }
         };
 
+        logger = Debug(context).getInstance().getLogger(instance);
+
         reset();
+    }
+
+    function doTrailingTransportInfoRequest(mediaType, url) {
+        fetch(url, { method: 'HEAD' })
+            .then((response) => {
+                push(mediaType, { _responseHeaders: response.headers });
+            })
+            .catch((err) => {
+                logger.debug('doTrailingTransportInfoRequest failed with err: ', err);
+            });
     }
 
     function pushMetricsFromSample(ewmaWeight, mediaType, sample) {
@@ -217,6 +233,7 @@ function TransportInfoHistory(config) {
         // Ensure all dictionaries are initialised
         checkSettingsForMediaType(mediaType);
 
+        let trailingRequestUrl = null;
         const tiDstPort = transportInfo.length > 0 ? transportInfo[0].dstport : NaN;
 
         if (isMediaSegmentRequest(httpRequest)) {
@@ -224,6 +241,10 @@ function TransportInfoHistory(config) {
             // seen port for media type
             transportInfo.forEach(sample => pushMetricsFromSample(EWMA_MEDIA_SEGMENT_HEADER_WEIGHT, mediaType, sample));
             transportInfoPort[mediaType] = tiDstPort;
+
+            if (settings.get().streaming.useTrailingTransportInfoRequests) {
+                trailingRequestUrl = httpRequest.url;
+            }
         } else if (sharesNetworkCharacteristics(mediaType, tiDstPort)) {
             // Only store additional transport-info data if flow shares one used for media segment
             // requests
@@ -234,6 +255,10 @@ function TransportInfoHistory(config) {
         latencyHistory[mediaType] = latencyHistory[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
         throughputHistory[mediaType] = throughputHistory[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
         transportInfoHistory[mediaType] = transportInfoHistory[mediaType].slice(-MAX_MEASUREMENTS_TO_KEEP);
+
+        if (trailingRequestUrl !== null && trailingRequestUrl !== undefined && trailingRequestUrl.length > 0) {
+            doTrailingTransportInfoRequest(mediaType, trailingRequestUrl);
+        }
     }
 
     function estimateThroughputFromTransportInfo(transportInfo) {
@@ -357,7 +382,7 @@ function TransportInfoHistory(config) {
         transportInfoHistory[mediaType] = transportInfoHistory[mediaType] || [];
     }
 
-    const instance = {
+    instance = {
         push: push,
         getAverageLatency: getAverageLatency,
         getAverageThroughput: getAverageThroughput,
