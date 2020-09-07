@@ -110,7 +110,7 @@ function TransportInfoHistory(config) {
             });
     }
 
-    function pushMetricsFromSample(ewmaWeight, mediaType, sample) {
+    function pushMetricsFromSample(ewmaWeight, mediaType, sample, pushStart) {
         const latency = filterValidLatencySample(sample) ? sample.rtt : NaN;
         const throughput = filterValidThroughputSample(sample) ? estimateThroughputFromTransportInfo(sample) : NaN;
 
@@ -122,6 +122,7 @@ function TransportInfoHistory(config) {
 
         if (!isNaN(throughput)) {
             const throughputKbps = throughput / 1000;
+            reportRawThroughputMetric(mediaType, throughputKbps, pushStart);
             throughputHistory[mediaType].push(throughputKbps);
             updateEwmaEstimate(ewmaThroughputDict[mediaType], throughputKbps, ewmaWeight, ewmaHalfLife.throughputHalfLife);
         }
@@ -225,6 +226,8 @@ function TransportInfoHistory(config) {
     }
 
     function push(mediaType, httpRequest) {
+        const pushStart = new Date();
+
         const transportInfo = parseTransportInfoHeader(httpRequest._responseHeaders);
         if (transportInfo === null || transportInfo === undefined) {
             return;
@@ -239,7 +242,7 @@ function TransportInfoHistory(config) {
         if (isMediaSegmentRequest(httpRequest)) {
             // Always store transport-info data for media segment requests and update most recently
             // seen port for media type
-            transportInfo.forEach(sample => pushMetricsFromSample(EWMA_MEDIA_SEGMENT_HEADER_WEIGHT, mediaType, sample));
+            transportInfo.forEach(sample => pushMetricsFromSample(EWMA_MEDIA_SEGMENT_HEADER_WEIGHT, mediaType, sample, pushStart));
             transportInfoPort[mediaType] = tiDstPort;
 
             if (settings.get().streaming.useTrailingTransportInfoRequests) {
@@ -248,7 +251,7 @@ function TransportInfoHistory(config) {
         } else if (sharesNetworkCharacteristics(mediaType, tiDstPort)) {
             // Only store additional transport-info data if flow shares one used for media segment
             // requests
-            transportInfo.forEach(sample => pushMetricsFromSample(EWMA_HEAD_REQUEST_HEADER_WEIGHT, mediaType, sample));
+            transportInfo.forEach(sample => pushMetricsFromSample(EWMA_HEAD_REQUEST_HEADER_WEIGHT, mediaType, sample, pushStart));
         }
 
         // Ensure all new dictionaries are clamped to maximum size
@@ -372,6 +375,28 @@ function TransportInfoHistory(config) {
             average *= settings.get().streaming.abr.bandwidthSafetyFactor;
         }
         return average;
+    }
+
+    function reportRawThroughputMetric(mediaType, throughput, time) {
+        if ((mediaType.toLowerCase() === 'audio' || mediaType.toLowerCase() === 'video') && window.metricsServerUrl && window.testId) {
+            const metricname = mediaType === 'audio' ? 'RawThroughputAudio' : 'RawThroughputVideo';
+
+            const params = {
+                testId: window.testId,
+                metricname,
+                throughput,
+                time
+            };
+
+            const queryString = Object
+                  .entries(params)
+                  .map(([key, val]) => `${encodeURIComponent(key)}=${encodeURIComponent(val)}`)
+                  .join('&');
+
+            const url = `${window.metricsServerUrl}?${queryString}`;
+
+            fetch(url).catch(err => logger.error(`Request failed for ${url} :: ${err}`));
+        }
     }
 
     function checkSettingsForMediaType(mediaType) {
