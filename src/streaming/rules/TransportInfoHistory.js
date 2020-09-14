@@ -353,7 +353,7 @@ function TransportInfoHistory(config) {
 
         return arr
             .slice(-sampleSize)
-            .reduce((sum, sample) => sum + sample) / arr.length;
+            .reduce((sum, sample) => sum + sample) / sampleSize;
     }
 
     function getAverage(isThroughput, mediaType, isDynamic) {
