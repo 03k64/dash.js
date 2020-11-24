@@ -29,7 +29,6 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 import ThroughputRule from './ThroughputRule';
-import InsufficientBufferRule from './InsufficientBufferRule';
 import AbandonRequestsRule from './AbandonRequestsRule';
 import DroppedFramesRule from './DroppedFramesRule';
 import SwitchHistoryRule from './SwitchHistoryRule';
@@ -69,11 +68,6 @@ function ABRRulesCollection(config) {
             );
             qualitySwitchRules.push(
                 ThroughputRule(context).create({
-                    dashMetrics: dashMetrics
-                })
-            );
-            qualitySwitchRules.push(
-                InsufficientBufferRule(context).create({
                     dashMetrics: dashMetrics
                 })
             );
