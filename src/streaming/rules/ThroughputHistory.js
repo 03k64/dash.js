@@ -136,10 +136,11 @@ function ThroughputHistory(config) {
     }
 
     function reportRawThroughputMetric(mediaType, throughput, time) {
-        if ((mediaType.toLowerCase() === 'audio' || mediaType.toLowerCase() === 'video') && window.metricsServerUrl && window.testId) {
+        if ((mediaType.toLowerCase() === 'audio' || mediaType.toLowerCase() === 'video') && window.metricsServerUrl && window.testId && window.clientId) {
             const metricname = mediaType === 'audio' ? 'RawThroughputAudio' : 'RawThroughputVideo';
 
             const params = {
+                clientId: window.clientId,
                 testId: window.testId,
                 metricname,
                 throughput,
