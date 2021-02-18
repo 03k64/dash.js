@@ -174,6 +174,8 @@ function ThroughputHistory(config) {
     }
 
     function getSampleSize(isThroughput, mediaType, isLive) {
+        const fixedWindowSize = settings.get().streaming.abr.slidingWindowSize;
+
         let arr,
             sampleSize;
 
@@ -183,6 +185,10 @@ function ThroughputHistory(config) {
         } else {
             arr = latencyDict[mediaType];
             sampleSize = AVERAGE_LATENCY_SAMPLE_AMOUNT;
+        }
+
+        if (fixedWindowSize > 0) {
+            return arr ? Math.min(fixedWindowSize, arr.length) : 0;
         }
 
         if (!arr) {

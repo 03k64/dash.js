@@ -102,6 +102,7 @@ import {HTTPRequest} from '../streaming/vo/metrics/HTTPRequest';
  *          },
  *          abr: {
  *              movingAverageMethod: Constants.MOVING_AVERAGE_SLIDING_WINDOW,
+ *              slidingWindowSize: 0,
  *              ABRStrategy: Constants.ABR_STRATEGY_DYNAMIC,
  *              bandwidthSafetyFactor: 0.9,
  *              useDefaultABRRules: true,
@@ -168,6 +169,11 @@ import {HTTPRequest} from '../streaming/vo/metrics/HTTPRequest';
  * Two separate estimates are maintained, a fast one with a three-second half life and a slow one with an eight-second half life.
  * The throughput estimate at any time is the minimum of the fast and slow estimates.
  * This allows a fast reaction to a bandwidth drop and prevents oscillations on bandwidth spikes.
+ * @property {number} [slidingWindowSize=0]
+ * Sets the window size used when movingAverageMethod="slidingWindow". A value of 0 uses a dynamically sized window that
+ * is larger in the presence of larger differences between consecutives throughput samples. A positive integer value can
+ * be specified to fix the window at the desired size subject to sufficient samples being present in the throughput
+ * history.
  * @property {string} [ABRStrategy="abrDynamic"] Returns the current ABR strategy being used: "abrDynamic", "abrBola" or "abrThroughput".
  * @property {number} [bandwidthSafetyFactor=0.9]
  * Standard ABR throughput rules multiply the throughput by this value. It should be between 0 and 1,
@@ -433,6 +439,7 @@ function Settings() {
             },
             abr: {
                 movingAverageMethod: Constants.MOVING_AVERAGE_SLIDING_WINDOW,
+                slidingWindowSize: 0,
                 ABRStrategy: Constants.ABR_STRATEGY_DYNAMIC,
                 bandwidthSafetyFactor: 0.9,
                 useDefaultABRRules: true,
