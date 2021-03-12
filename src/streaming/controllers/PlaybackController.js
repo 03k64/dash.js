@@ -697,16 +697,16 @@ function PlaybackController() {
             const currentPlaybackRate = videoModel.getPlaybackRate();
             const liveCatchupPlaybackRate = settings.get().streaming.liveCatchup.playbackRate;
             const currentLiveLatency = getCurrentLiveLatency();
-            const liveDelay = mediaPlayerModel.getLiveDelay();
+            const playerLiveDelay = mediaPlayerModel.getLiveDelay();
             const bufferLevel = getBufferLevel();
             // Custom playback control: Based on buffer level
             if (_getCatchupMode() === Constants.LIVE_CATCHUP_MODE_LOLP) {
                 const liveCatchUpMinDrift = settings.get().streaming.liveCatchup.minDrift;
                 const playbackBufferMin = settings.get().streaming.liveCatchup.playbackBufferMin;
-                results = _calculateNewPlaybackRateLolP(liveCatchupPlaybackRate, currentLiveLatency, liveDelay, liveCatchUpMinDrift, playbackBufferMin, bufferLevel, currentPlaybackRate);
+                results = _calculateNewPlaybackRateLolP(liveCatchupPlaybackRate, currentLiveLatency, playerLiveDelay, liveCatchUpMinDrift, playbackBufferMin, bufferLevel, currentPlaybackRate);
             } else {
                 // Default playback control: Based on target and current latency
-                results = _calculateNewPlaybackRateDefault(liveCatchupPlaybackRate, currentLiveLatency, liveDelay, bufferLevel, currentPlaybackRate);
+                results = _calculateNewPlaybackRateDefault(liveCatchupPlaybackRate, currentLiveLatency, playerLiveDelay, bufferLevel, currentPlaybackRate);
             }
 
             // Obtain newRate and apply to video model
@@ -715,7 +715,7 @@ function PlaybackController() {
                 videoModel.setPlaybackRate(newRate);
             }
 
-            const deltaLatency = currentLiveLatency - liveDelay;
+            const deltaLatency = currentLiveLatency - playerLiveDelay;
             if (settings.get().streaming.liveCatchup.maxDrift > 0 && !isLowLatencySeekingInProgress &&
                 deltaLatency > settings.get().streaming.liveCatchup.maxDrift) {
                 logger.info('Low Latency catchup mechanism. Latency too high, doing a seek to live point');
