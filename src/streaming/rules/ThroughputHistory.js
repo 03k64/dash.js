@@ -30,6 +30,7 @@
  */
 
 import Constants from '../constants/Constants';
+import Debug from '../../core/Debug';
 import FactoryMaker from '../../core/FactoryMaker';
 
 // throughput generally stored in kbit/s
@@ -38,6 +39,8 @@ import FactoryMaker from '../../core/FactoryMaker';
 function ThroughputHistory(config) {
 
     config = config || {};
+    const context = this.context;
+
     // sliding window constants
     const MAX_MEASUREMENTS_TO_KEEP = 20;
     const AVERAGE_THROUGHPUT_SAMPLE_AMOUNT_LIVE = 3;
@@ -56,6 +59,8 @@ function ThroughputHistory(config) {
 
     let throughputDict,
         latencyDict,
+        instance,
+        logger,
         ewmaThroughputDict,
         ewmaLatencyDict,
         ewmaHalfLife;
@@ -65,6 +70,8 @@ function ThroughputHistory(config) {
             throughputHalfLife: { fast: EWMA_THROUGHPUT_FAST_HALF_LIFE_SECONDS, slow: EWMA_THROUGHPUT_SLOW_HALF_LIFE_SECONDS },
             latencyHalfLife:    { fast: EWMA_LATENCY_FAST_HALF_LIFE_COUNT,      slow: EWMA_LATENCY_SLOW_HALF_LIFE_COUNT }
         };
+
+        logger = Debug(context).getInstance().getLogger(instance);
 
         reset();
     }
@@ -78,6 +85,8 @@ function ThroughputHistory(config) {
     }
 
     function push(mediaType, httpRequest, useDeadTimeLatency) {
+        const pushStart = new Date();
+
         if (!httpRequest.trace || !httpRequest.trace.length) {
             return;
         }
@@ -111,6 +120,7 @@ function ThroughputHistory(config) {
             clearSettingsForMediaType(mediaType);
         }
 
+        reportRawThroughputMetric(mediaType, throughput, pushStart);
         throughputDict[mediaType].push(throughput);
         if (throughputDict[mediaType].length > MAX_MEASUREMENTS_TO_KEEP) {
             throughputDict[mediaType].shift();
@@ -123,6 +133,28 @@ function ThroughputHistory(config) {
 
         updateEwmaEstimate(ewmaThroughputDict[mediaType], throughput, 0.001 * downloadTimeInMilliseconds, ewmaHalfLife.throughputHalfLife);
         updateEwmaEstimate(ewmaLatencyDict[mediaType], latencyTimeInMilliseconds, 1, ewmaHalfLife.latencyHalfLife);
+    }
+
+    function reportRawThroughputMetric(mediaType, throughput, time) {
+        if ((mediaType.toLowerCase() === 'audio' || mediaType.toLowerCase() === 'video') && window.metricsServerUrl && window.testId) {
+            const metricname = mediaType === 'audio' ? 'RawThroughputAudio' : 'RawThroughputVideo';
+
+            const params = {
+                testId: window.testId,
+                metricname,
+                throughput,
+                time
+            };
+
+            const queryString = Object
+                  .entries(params)
+                  .map(([key, val]) => `${encodeURIComponent(key)}=${encodeURIComponent(val)}`)
+                  .join('&');
+
+            const url = `${window.metricsServerUrl}?${queryString}`;
+
+            fetch(url).catch(err => logger.error(`Request failed for ${url} :: ${err}`));
+        }
     }
 
     function updateEwmaEstimate(ewmaObj, value, weight, halfLife) {
@@ -244,7 +276,7 @@ function ThroughputHistory(config) {
         ewmaLatencyDict = {};
     }
 
-    const instance = {
+    instance = {
         push: push,
         getAverageThroughput: getAverageThroughput,
         getSafeAverageThroughput: getSafeAverageThroughput,
