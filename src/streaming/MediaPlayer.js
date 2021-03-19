@@ -1106,6 +1106,33 @@ function MediaPlayer() {
     }
 
     /**
+     * Returns the average round-trip latency computed from the Transport-Info headers
+     *
+     * @param {MediaType} type
+     * @return {number} value
+     * @memberof module:MediaPlayer
+     * @instance
+     */
+
+    function getAverageTransportLatency(type) {
+        const transportInfoHistory = abrController.getTransportInfoHistory();
+        return transportInfoHistory ? transportInfoHistory.getAverageLatency(type) : 0;
+    }
+
+    /**
+     * Returns the average throughput computed from the Transport-Info headers
+     *
+     * @param {MediaType} type
+     * @return {number} value
+     * @memberof module:MediaPlayer
+     * @instance
+     */
+    function getAverageTransportThroughput(type) {
+        const transportInfoHistory = abrController.getTransportInfoHistory();
+        return transportInfoHistory ? transportInfoHistory.getAverageThroughput(type) : 0;
+    }
+
+    /**
      * Sets whether withCredentials on XHR requests for a particular request
      * type is true or false
      *
@@ -2422,6 +2449,8 @@ function MediaPlayer() {
         removeABRCustomRule: removeABRCustomRule,
         removeAllABRCustomRule: removeAllABRCustomRule,
         getAverageThroughput: getAverageThroughput,
+        getAverageTransportLatency: getAverageTransportLatency,
+        getAverageTransportThroughput: getAverageTransportThroughput,
         retrieveManifest: retrieveManifest,
         addUTCTimingSource: addUTCTimingSource,
         removeUTCTimingSource: removeUTCTimingSource,
