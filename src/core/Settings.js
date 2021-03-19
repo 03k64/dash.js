@@ -55,6 +55,8 @@ import {HTTPRequest} from '../streaming/vo/metrics/HTTPRequest';
  *          dispatchEvent: false
  *      },
  *      streaming: {
+ *          maximumSegmentSize: 1460,
+ *          useTrailingTransportInfoRequests: false,
  *          metricsMaxListDepth: 1000,
  *          abandonLoadTimeout: 10000,
  *          liveDelayFragmentCount: NaN,
@@ -275,6 +277,8 @@ import {HTTPRequest} from '../streaming/vo/metrics/HTTPRequest';
 
 /**
  * @typedef {Object} StreamingSettings
+ * @property {number} [maximumSegmentSize=1460] MSS value used for the downstream connection (ie. from video server to client browser)
+ * @property {number} [useTrailingTransportInfoRequests=false] Sets whether additional HEAD requests should be made to obtain intra-segment transport-info headers immediately following regularly scheduled requests.
  * @property {number} [metricsMaxListDepth=1000]
  * Maximum list depth of metrics.
  * @property {number} [abandonLoadTimeout=10000]
@@ -606,6 +610,8 @@ function Settings() {
             dispatchEvent: false
         },
         streaming: {
+            maximumSegmentSize: 1460,
+            useTrailingTransportInfoRequests: false,
             metricsMaxListDepth: 1000,
             abandonLoadTimeout: 10000,
             liveDelayFragmentCount: NaN,
