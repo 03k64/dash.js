@@ -378,6 +378,12 @@ class MediaPlayerEvents extends EventsBase {
          * @event MediaPlayerEvents#CONFORMANCE_VIOLATION
          */
         this.CONFORMANCE_VIOLATION = 'conformanceViolation';
+
+        /**
+         * Triggered every time a HEAD request to obtain a new Transport-Info header is received.
+         * @event MediaPlayerEvents#TRANSPORT_INFO_RETRIEVED
+         */
+        this.TRANSPORT_INFO_RETRIEVED = 'transportInfoRetrieved';
     }
 }
 
