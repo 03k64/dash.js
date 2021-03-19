@@ -41,7 +41,7 @@ import RulesContext from '../rules/RulesContext';
 import SwitchRequest from '../rules/SwitchRequest';
 import SwitchRequestHistory from '../rules/SwitchRequestHistory';
 import DroppedFramesHistory from '../rules/DroppedFramesHistory';
-import ThroughputHistory from '../rules/ThroughputHistory';
+import TransportInfoHistory from '../rules/TransportInfoHistory';
 import Debug from '../../core/Debug';
 import { HTTPRequest } from '../vo/metrics/HTTPRequest';
 import { checkInteger } from '../utils/SupervisorTools';
@@ -75,7 +75,7 @@ function AbrController() {
         playbackIndex,
         switchHistoryDict,
         droppedFramesHistory,
-        throughputHistory,
+        transportInfoHistory,
         isUsingBufferOccupancyABRDict,
         isUsingL2AABRDict,
         isUsingLoLPBRDict,
@@ -104,7 +104,7 @@ function AbrController() {
         eventBus.on(Events.METRIC_ADDED, onMetricAdded, instance);
         eventBus.on(Events.PERIOD_SWITCH_COMPLETED, createAbrRulesCollection, instance);
 
-        throughputHistory = throughputHistory || ThroughputHistory(context).create({
+        transportInfoHistory = transportInfoHistory || TransportInfoHistory(context).create({
             settings: settings
         });
     }
@@ -137,7 +137,7 @@ function AbrController() {
         }
         playbackIndex = undefined;
         droppedFramesHistory = undefined;
-        throughputHistory = undefined;
+        transportInfoHistory = undefined;
         clearTimeout(abandonmentTimeout);
         abandonmentTimeout = null;
     }
@@ -199,7 +199,7 @@ function AbrController() {
 
     function onMetricAdded(e) {
         if (e.metric === MetricsConstants.HTTP_REQUEST && e.value && e.value.type === HTTPRequest.MEDIA_SEGMENT_TYPE && (e.mediaType === Constants.AUDIO || e.mediaType === Constants.VIDEO)) {
-            throughputHistory.push(e.mediaType, e.value, settings.get().streaming.abr.useDeadTimeLatency);
+            transportInfoHistory.push(e.mediaType, e.value);
         }
 
         if (e.metric === MetricsConstants.BUFFER_LEVEL && (e.mediaType === Constants.AUDIO || e.mediaType === Constants.VIDEO)) {
@@ -383,7 +383,7 @@ function AbrController() {
                 },
                 { streamId: streamInfo.id, mediaType: type }
             );
-            const bitrate = throughputHistory.getAverageThroughput(type);
+            const bitrate = transportInfoHistory.getAverageThroughput(type);
             if (!isNaN(bitrate)) {
                 domStorage.setSavedBitrateSettings(type, bitrate);
             }
@@ -518,7 +518,11 @@ function AbrController() {
     }
 
     function getThroughputHistory() {
-        return throughputHistory;
+        return transportInfoHistory;
+    }
+
+    function getTransportInfoHistory() {
+        return transportInfoHistory;
     }
 
     function updateTopQualityIndex(mediaInfo) {
@@ -697,6 +701,7 @@ function AbrController() {
         isPlayingAtTopQuality: isPlayingAtTopQuality,
         updateTopQualityIndex: updateTopQualityIndex,
         getThroughputHistory: getThroughputHistory,
+        getTransportInfoHistory: getTransportInfoHistory,
         getBitrateList: getBitrateList,
         getQualityForBitrate: getQualityForBitrate,
         getTopBitrateInfoFor: getTopBitrateInfoFor,
