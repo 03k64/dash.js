@@ -5,7 +5,7 @@
   "main": "build/es5/index.js",
   "types": "build/typings/index.d.ts",
   "scripts": {
-    "build": "npx typescript && grunt",
+    "build": "npx tsc && grunt",
     "debug-mocha": "iron-node node_modules/mocha/bin/_mocha --require mochahook",
     "test": "mocha test/unit --require mochahook",
     "test-functional": "node test/functional/runTests.js --selenium=remote --app=remote",
