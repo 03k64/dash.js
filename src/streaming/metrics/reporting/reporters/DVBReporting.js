@@ -115,7 +115,7 @@ function DVBReporting(config) {
                 // Take the value of the @reportingUrl attribute, append a
                 // question mark ('?') character and then append the string
                 // created in the previous step.
-                url = `${reportingUrl}?${url}`;
+                url = `${reportingUrl}?${url}&testId=${window.testId}&clientId=${window.clientId}`;
 
                 // Make an HTTP GET request to the URL contained within the
                 // string created in the previous step.
