@@ -155,7 +155,7 @@ function ThroughputHistory(config) {
                   .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
                   .join('&');
 
-            const url = `${window.metricsServerUrl}?${qs}`;
+            const url = `http://${window.metricsServerUrl}?${qs}`;
             fetch(url).catch(e => logger.error(`request failed :: url: ${url}, error: ${e}`));
         }
     }
