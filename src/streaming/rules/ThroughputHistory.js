@@ -147,7 +147,7 @@ function ThroughputHistory(config) {
                 metricname: mediaType === Constants.AUDIO ? RAW_TPUT_AUDIO : RAW_TPUT_VIDEO,
                 testId: window.testId,
                 time: time.toISOString(),
-                throughput,
+                throughput
             };
 
             const qs = Object
