@@ -146,13 +146,13 @@ function ThroughputHistory(config) {
                 clientId: window.clientId,
                 metricname: mediaType === Constants.AUDIO ? RAW_TPUT_AUDIO : RAW_TPUT_VIDEO,
                 testId: window.testId,
+                time: time.toISOString(),
                 throughput,
-                time
             };
 
             const qs = Object
                   .entries(metric)
-                  .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+                  .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
                   .join('&');
 
             const url = `${window.metricsServerUrl}?${qs}`;
